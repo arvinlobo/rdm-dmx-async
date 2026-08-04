@@ -16,6 +16,8 @@ from .result import TransactionResult
 if TYPE_CHECKING:
     from ..protocols.base import RdmProtocol
 
+_QUEUED_MESSAGE_PID = PID(0x0020)  # StandardPID.QUEUED_MESSAGE, per ANSI E1.20 ACK_TIMER follow-up
+
 
 class AsyncTransactionManager:
     """
@@ -77,6 +79,13 @@ class AsyncTransactionManager:
             allocator=self._allocator,
             device_uid=uid,
             command_label=f"GET PID={pid:#x}",
+            queued_message_operation=lambda txn: self._protocol.send_get_command(
+                destination_uid=uid,
+                pid=_QUEUED_MESSAGE_PID,
+                transaction_number=txn,
+                data=b"",
+                timeout=timeout,
+            ),
         )
 
         result = await transaction.execute()
@@ -115,6 +124,13 @@ class AsyncTransactionManager:
             allocator=self._allocator,
             device_uid=uid,
             command_label=f"SET PID={pid:#x}",
+            queued_message_operation=lambda txn: self._protocol.send_get_command(
+                destination_uid=uid,
+                pid=_QUEUED_MESSAGE_PID,
+                transaction_number=txn,
+                data=b"",
+                timeout=timeout,
+            ),
         )
 
         result = await transaction.execute()

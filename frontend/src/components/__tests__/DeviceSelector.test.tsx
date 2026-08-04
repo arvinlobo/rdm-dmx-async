@@ -54,6 +54,6 @@ describe('DeviceSelector', () => {
     render(
       <DeviceSelector devices={[]} selectedUid={null} onSelect={vi.fn()} onDiscover={vi.fn()} discovering />,
     )
-    expect(screen.getByRole('button', { name: 'Discovering…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Discover Devices' })).toBeDisabled()
   })
 })

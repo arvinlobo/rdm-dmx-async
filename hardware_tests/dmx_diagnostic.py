@@ -97,7 +97,7 @@ class DMXDiagnostic:
         logger.info("")
 
         try:
-            adapter = EnttecAdapter("COM1", use_mk2_protocol=True)
+            adapter = EnttecAdapter("COM1")
 
             # Test DMX framing
             dmx_data = bytes([255, 128, 64])
@@ -199,9 +199,9 @@ class DMXDiagnostic:
 
         EXPECTED BEHAVIOR:
         - Fixture should turn ON and STAY ON.
-        - NetworkManager.send_dmx() lazily starts a background scheduler that
-          keeps re-transmitting the last buffer automatically (~40 Hz), so a
-          single call is enough to hold a static DMX level.
+        - NetworkManager.send_dmx(repeat=True) starts a background scheduler
+          that keeps re-transmitting the last buffer automatically (~40 Hz),
+          so a single call is enough to hold a static DMX level.
         """
         logger.info("=" * 70)
         logger.info("TEST 1: Single send_dmx() Call")
@@ -224,7 +224,7 @@ class DMXDiagnostic:
             dmx_data[self.dmx_address - 1 + i] = 255
 
         try:
-            await self.manager.send_dmx(bytes(dmx_data))
+            await self.manager.send_dmx(bytes(dmx_data), repeat=True)
             logger.info("✓ Packet sent successfully")
             logger.info("")
             logger.info("If the fixture turned ON and stayed on, DMX output is WORKING!")
@@ -245,8 +245,8 @@ class DMXDiagnostic:
 
         EXPECTED BEHAVIOR:
         - Fixture stays ON for the full duration.
-        - This confirms the background scheduler (started by Test 1's single
-          send_dmx() call) keeps refreshing the output on its own.
+        - This confirms the background scheduler (started by Test 1's
+          send_dmx(repeat=True) call) keeps refreshing the output on its own.
         """
         logger.info("=" * 70)
         logger.info("TEST 2: Sustained Output Over Time")
@@ -266,9 +266,9 @@ class DMXDiagnostic:
             dmx_data[self.dmx_address - 1 + i] = 255
 
         try:
-            # A single send_dmx() call lazily starts the background scheduler,
-            # which keeps re-transmitting this buffer automatically (~40 Hz).
-            await self.manager.send_dmx(bytes(dmx_data))
+            # send_dmx(repeat=True) starts the background scheduler, which
+            # keeps re-transmitting this buffer automatically (~40 Hz).
+            await self.manager.send_dmx(bytes(dmx_data), repeat=True)
             await asyncio.sleep(duration)
 
             logger.info("✓ Held output for %.1f seconds", duration)

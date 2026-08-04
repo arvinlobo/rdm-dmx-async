@@ -1,9 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../api/client'
+import { useToast } from '../context/ToastContext'
+import { Checkbox } from './Checkbox'
 import { ColorWheel } from './ColorWheel'
+import { DmxChannelMeter } from './DmxChannelMeter'
 import { Slider } from './Slider'
-import { hsvToRgb } from '../utils/color'
+import { hsvToRgb, rgbToHex } from '../utils/color'
 import { resolveRgbwOffsets, resolveTwOffsets } from '../utils/dmxChannelMapping'
+
+const MAX_SWATCHES = 8
 
 export interface DmxSlotPanelProps {
   uid?: string | null
@@ -38,8 +43,11 @@ export function DmxSlotPanel({ uid = null, defaultStartAddress = 1 }: DmxSlotPan
   const [warm, setWarm] = useState(0)
   const [cool, setCool] = useState(0)
   const [slotDescriptions, setSlotDescriptions] = useState<string[] | null>(null)
+  const [repeat, setRepeat] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [swatches, setSwatches] = useState<string[]>([])
   const timeoutRef = useRef<number | undefined>(undefined)
+  const { showToast } = useToast()
 
   useEffect(() => {
     if (!uid) {
@@ -85,17 +93,51 @@ export function DmxSlotPanel({ uid = null, defaultStartAddress = 1 }: DmxSlotPan
       }
 
       api
-        .sendDmx({ channels })
+        .sendDmx({ channels, repeat })
         .then(() => setError(null))
-        .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Failed to send DMX'))
+        .catch((err: unknown) => {
+          const message = err instanceof ApiError ? err.message : 'Failed to send DMX'
+          setError(message)
+          showToast(message)
+        })
     }, SEND_DEBOUNCE_MS)
     return () => {
       if (timeoutRef.current !== undefined) window.clearTimeout(timeoutRef.current)
     }
-  }, [mode, singleValue, startAddress, hue, saturation, intensity, white, warm, cool, slotDescriptions])
+  }, [mode, singleValue, startAddress, hue, saturation, intensity, white, warm, cool, slotDescriptions, repeat, showToast])
 
   const { r, g, b } = hsvToRgb(hue, saturation, intensity)
   const usingRealSlots = slotDescriptions !== null && slotDescriptions.length > 0
+
+  const commitSwatch = () => {
+    const hex = rgbToHex(r, g, b)
+    setSwatches((prev) => (prev[0] === hex ? prev : [hex, ...prev.filter((c) => c !== hex)].slice(0, MAX_SWATCHES)))
+  }
+
+  const applySwatch = (hex: string) => {
+    const value = parseInt(hex.slice(1), 16)
+    const rr = (value >> 16) & 255
+    const gg = (value >> 8) & 255
+    const bb = value & 255
+    const max = Math.max(rr, gg, bb)
+    const nextIntensity = max / 255
+    if (max === 0) return
+    const nextR = rr / max
+    const nextG = gg / max
+    const nextB = bb / max
+    const cmax = Math.max(nextR, nextG, nextB)
+    const cmin = Math.min(nextR, nextG, nextB)
+    const delta = cmax - cmin
+    let nextHue = 0
+    if (delta !== 0) {
+      if (cmax === nextR) nextHue = 60 * (((nextG - nextB) / delta) % 6)
+      else if (cmax === nextG) nextHue = 60 * ((nextB - nextR) / delta + 2)
+      else nextHue = 60 * ((nextR - nextG) / delta + 4)
+    }
+    setHue(nextHue < 0 ? nextHue + 360 : nextHue)
+    setSaturation(cmax === 0 ? 0 : delta / cmax)
+    setIntensity(nextIntensity)
+  }
 
   return (
     <section className="dmx-slot-panel">
@@ -127,14 +169,23 @@ export function DmxSlotPanel({ uid = null, defaultStartAddress = 1 }: DmxSlotPan
         </button>
       </div>
 
+      <Checkbox
+        label="Repeat (keep re-sending until changed)"
+        checked={repeat}
+        onChange={setRepeat}
+      />
+
       {mode === 'single' && (
-        <Slider label="Level (all 512 channels)" value={singleValue} onChange={setSingleValue} min={0} max={255} />
+        <div className="dmx-slot-panel-grid">
+          <Slider label="Level (all 512 channels)" value={singleValue} onChange={setSingleValue} min={0} max={255} />
+          <DmxChannelMeter entries={[{ label: 'All', value: singleValue, color: '#9ca3af' }]} />
+        </div>
       )}
 
       {mode === 'rgbw' && (
         <div className="dmx-slot-panel-grid">
           <Slider label="Start Address" value={startAddress} onChange={setStartAddress} min={1} max={509} />
-          <div className="color-wheel-row">
+          <div className="color-wheel-row" onPointerUp={commitSwatch}>
             <ColorWheel
               hue={hue}
               saturation={saturation}
@@ -150,7 +201,30 @@ export function DmxSlotPanel({ uid = null, defaultStartAddress = 1 }: DmxSlotPan
               <span>G {g}</span>
               <span>B {b}</span>
             </div>
+            <DmxChannelMeter
+              entries={[
+                { label: 'R', value: r, color: '#ef4444' },
+                { label: 'G', value: g, color: '#22c55e' },
+                { label: 'B', value: b, color: '#3b82f6' },
+                { label: 'W', value: white, color: '#e5e7eb' },
+              ]}
+            />
           </div>
+          {swatches.length > 0 && (
+            <div className="swatch-row" role="group" aria-label="Recent colors">
+              {swatches.map((hex) => (
+                <button
+                  key={hex}
+                  type="button"
+                  className="swatch"
+                  style={{ background: hex }}
+                  title={hex}
+                  aria-label={`Apply color ${hex}`}
+                  onClick={() => applySwatch(hex)}
+                />
+              ))}
+            </div>
+          )}
           <Slider label="White" value={white} onChange={setWhite} min={0} max={255} />
         </div>
       )}
@@ -160,6 +234,12 @@ export function DmxSlotPanel({ uid = null, defaultStartAddress = 1 }: DmxSlotPan
           <Slider label="Start Address" value={startAddress} onChange={setStartAddress} min={1} max={509} />
           <Slider label="Warm White" value={warm} onChange={setWarm} min={0} max={255} />
           <Slider label="Cool White" value={cool} onChange={setCool} min={0} max={255} />
+          <DmxChannelMeter
+            entries={[
+              { label: 'Warm', value: warm, color: '#f59e0b' },
+              { label: 'Cool', value: cool, color: '#60a5fa' },
+            ]}
+          />
         </div>
       )}
 

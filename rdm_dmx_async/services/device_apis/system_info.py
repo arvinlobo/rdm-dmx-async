@@ -48,13 +48,19 @@ class SystemInfoAPI:
 
     async def get_parameter_description(self, pid: int) -> dict | None:
         """
-        Get parameter description for a specific PID.
+        Get parameter description for a specific PID (ANSI E1.20 sec. 10.7.2 GET_RESPONSE).
+
+        Only PIDs the device itself defines (typically its own manufacturer-specific
+        PIDs, 0x8000-0xFFDF) return meaningful data here - standard/native PIDs already
+        have their type/range fixed by the E1.20 spec itself, so devices commonly NAK
+        UNKNOWN_PID rather than echo back a description for them.
 
         Args:
             pid: PID to query description for
 
         Returns:
-            Dictionary with parameter metadata or None
+            Dictionary with parameter metadata (data_type, command_class, unit, prefix,
+            min_value, max_value, default_value, description) or None
         """
         data = struct.pack(">H", pid)
         response_data = await self._device.execute_get(
@@ -62,19 +68,35 @@ class SystemInfoAPI:
             data=data,
         )
 
+        # Fixed-size fields below run 18 bytes (pdl_size..default_value), plus the
+        # queried PID itself (2 bytes) = 20 - the variable-length ASCII description
+        # (up to 32 bytes) follows and may be absent, so a device with no description
+        # text may still return exactly 20.
         if response_data and len(response_data) >= 20:
-            # Parse PARAMETER_DESCRIPTION structure
             queried_pid = struct.unpack(">H", bytes(response_data[:2]))[0]
             pdl_size = response_data[2]
             data_type = response_data[3]
             command_class = response_data[4]
-            # Additional fields: type, unit, prefix, min/max values, etc.
+            # response_data[5] is reserved ("type"), always 0x00 per spec
+            unit = response_data[6]
+            prefix = response_data[7]
+            min_value = struct.unpack(">I", bytes(response_data[8:12]))[0]
+            max_value = struct.unpack(">I", bytes(response_data[12:16]))[0]
+            default_value = struct.unpack(">I", bytes(response_data[16:20]))[0]
+            description = (
+                bytes(response_data[20:]).split(b"\x00")[0].decode("ascii", errors="replace")
+            )
             return {
                 "pid": queried_pid,
                 "pdl_size": pdl_size,
                 "data_type": data_type,
                 "command_class": command_class,
-                "raw_data": list(response_data),
+                "unit": unit,
+                "prefix": prefix,
+                "min_value": min_value,
+                "max_value": max_value,
+                "default_value": default_value,
+                "description": description,
             }
         return None
 

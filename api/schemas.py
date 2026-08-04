@@ -9,11 +9,23 @@ class PortListResponse(BaseModel):
     ports: list[str]
 
 
+class InterfaceTypeListResponse(BaseModel):
+    interface_types: list[str]
+
+
 class ConnectRequest(BaseModel):
     port: str | None = Field(
         default=None, description="Serial port, e.g. COM5 (auto-detect if omitted)"
     )
-    interface_type: str = Field(default="ENTTEC_USB_PRO_MK2", description="InterfaceType name")
+    interface_type: str = Field(default="ENTTEC_USB_PRO", description="InterfaceType name")
+    controller_uid: str | None = Field(
+        default=None,
+        description=(
+            "Hex UID (e.g. 454E00000000) this controller identifies itself as. Required for "
+            "interfaces with no onboard widget to query a UID from (e.g. BARE_USB_RS485); ignored "
+            "for interfaces that can report their own (e.g. Enttec)."
+        ),
+    )
 
 
 class StatusResponse(BaseModel):
@@ -71,6 +83,13 @@ class OkResponse(BaseModel):
 class DmxSendRequest(BaseModel):
     channels: list[Annotated[int, Field(ge=0, le=255)]] = Field(min_length=1, max_length=512)
     port: int = Field(default=1, ge=1)
+    repeat: bool = Field(
+        default=False,
+        description=(
+            "If True, keep re-transmitting this frame in the background (~40 Hz) "
+            "until overwritten or stopped. Default False (single send)."
+        ),
+    )
 
 
 class ModuleSupport(BaseModel):
@@ -135,21 +154,34 @@ class PersonalityListResponse(BaseModel):
     options: list[PersonalityOption]
 
 
+class SupportedPidOption(BaseModel):
+    pid: int
+    name: str
+
+
+class SupportedPidListResponse(BaseModel):
+    options: list[SupportedPidOption]
+
+
 class SensorReading(BaseModel):
-    """A sensor's live value merged with its static definition, for display."""
+    """A sensor's live value merged with its static definition, for display.
+
+    Numeric fields are already scaled by the sensor's SI unit prefix (ANSI
+    E1.20), so consumers can display them directly without further scaling.
+    """
 
     sensor_number: int
     description: str
     unit: int
     prefix: int
-    present_value: int | None = None
-    lowest: int | None = None
-    highest: int | None = None
-    recorded: int | None = None
-    range_min: int
-    range_max: int
-    normal_min: int
-    normal_max: int
+    present_value: float | None = None
+    lowest: float | None = None
+    highest: float | None = None
+    recorded: float | None = None
+    range_min: float
+    range_max: float
+    normal_min: float
+    normal_max: float
     supports_recording: bool
 
 

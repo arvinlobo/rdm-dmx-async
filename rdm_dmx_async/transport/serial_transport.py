@@ -33,7 +33,7 @@ class AsyncSerialTransport:
     Example:
         # DMX hardware (adapter provides config)
         from .adapters import EnttecAdapter
-        adapter = EnttecAdapter("COM3", use_mk2_protocol=True)
+        adapter = EnttecAdapter("COM3")
         transport = AsyncSerialTransport(adapter)
 
         # Generic serial device
@@ -216,6 +216,20 @@ class AsyncSerialTransport:
 
         return data, addr
 
+    def _assert_break_and_write(self, data: bytes) -> None:
+        """
+        Toggle the UART break condition immediately before writing a frame.
+
+        Used for adapters with no onboard BREAK/MAB generator (see
+        `InterfaceAdapter.requires_manual_break`) - asserting then clearing
+        `break_condition` produces the DMX BREAK signal on the wire that a
+        purpose-built widget's firmware would otherwise generate itself.
+        """
+        assert self._serial is not None
+        self._serial.break_condition = True
+        self._serial.break_condition = False
+        self._serial.write(data)
+
     async def _tx_loop(self) -> None:
         """Background task for transmitting queued packets"""
         self._logger.debug("TX loop started")
@@ -229,16 +243,13 @@ class AsyncSerialTransport:
                     )
 
                     if bypass_framing:
-                        # Data is already framed (e.g., DMX output), send as-is
+                        # Data is already framed (e.g., DMX output), send as-is.
+                        # Not logged: this runs per DMX frame (up to ~40 Hz
+                        # when repeating), which would flood the log file.
                         framed_packet = data
-                        self._logger.info(
-                            "[TX_DIRECT] Sending pre-framed packet (%d bytes): %s",
-                            len(framed_packet),
-                            " ".join(f"{b:02X}" for b in framed_packet),
-                        )
                     else:
                         # Frame RDM data using interface adapter
-                        self._logger.info(
+                        self._logger.debug(
                             "[TX_RDM] Raw RDM packet (%d bytes): %s",
                             len(data),
                             " ".join(f"{b:02X}" for b in data),
@@ -247,7 +258,7 @@ class AsyncSerialTransport:
                         # Detect packet type and use appropriate framing
                         try:
                             is_discovery = self._protocol_detector.is_discovery_packet(data)
-                            self._logger.info(f"[DETECTOR] is_discovery={is_discovery}")
+                            self._logger.debug(f"[DETECTOR] is_discovery={is_discovery}")
                         except Exception as e:
                             self._logger.error(f"[DETECTOR] Error detecting packet: {e}")
                             is_discovery = False
@@ -258,7 +269,7 @@ class AsyncSerialTransport:
                         else:
                             framed_packet = self._adapter.frame_rdm_request(data, port=1)
 
-                        self._logger.info(
+                        self._logger.debug(
                             "[TX_FRAMED] Framed packet (%d bytes) via %s: %s",
                             len(framed_packet),
                             self._adapter.interface_type.value,
@@ -266,9 +277,14 @@ class AsyncSerialTransport:
                         )
 
                     # Write to serial port (blocking, but fast)
-                    await asyncio.get_event_loop().run_in_executor(
-                        None, self._serial.write, framed_packet
-                    )
+                    if self._adapter.requires_manual_break:
+                        await asyncio.get_event_loop().run_in_executor(
+                            None, self._assert_break_and_write, framed_packet
+                        )
+                    else:
+                        await asyncio.get_event_loop().run_in_executor(
+                            None, self._serial.write, framed_packet
+                        )
 
                     # Small delay between packets (skip for DMX to maximize throughput)
                     if not bypass_framing:
@@ -302,7 +318,7 @@ class AsyncSerialTransport:
                         await asyncio.sleep(0.01)
                         continue
 
-                    self._logger.info(
+                    self._logger.debug(
                         "[RX_RAW] Received %d raw bytes: %s",
                         len(data),
                         " ".join(f"{b:02X}" for b in data[:50]),
@@ -314,7 +330,7 @@ class AsyncSerialTransport:
 
                     # Queue all extracted frames
                     for rdm_packet in frames:
-                        self._logger.info(
+                        self._logger.debug(
                             "[RX_RDM] Parsed RDM packet (%d bytes) via %s: %s",
                             len(rdm_packet),
                             self._adapter.interface_type.value,

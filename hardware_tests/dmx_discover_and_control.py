@@ -3,9 +3,9 @@ DMX Discovery and Control
 
 Discovers RDM devices, reads their DMX address, and sends DMX output to that address.
 
-Note: NetworkManager.send_dmx() lazily starts a background scheduler that keeps
-re-transmitting the last buffer automatically (~40 Hz) - a single call is enough
-to hold the output for the whole duration.
+Note: NetworkManager.send_dmx(repeat=True) starts a background scheduler that
+keeps re-transmitting the last buffer automatically (~40 Hz) - a single call is
+enough to hold the output for the whole duration.
 
 Usage:
     python dmx_discover_and_control.py [--port COM3] [--duration 10]
@@ -116,11 +116,11 @@ async def discover_and_control(port: str | None = None, duration: float = 10.0):
         logger.info("Press Ctrl+C to stop early")
         logger.info("")
 
-        # send_dmx() lazily starts a background scheduler that keeps
+        # send_dmx(repeat=True) starts a background scheduler that keeps
         # re-transmitting this buffer automatically - one call holds the
         # level for the full duration.
         try:
-            await manager.send_dmx(bytes(dmx_universe))
+            await manager.send_dmx(bytes(dmx_universe), repeat=True)
             await asyncio.sleep(duration)
         except KeyboardInterrupt:
             logger.info("")

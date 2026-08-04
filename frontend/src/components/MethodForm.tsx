@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { api, ApiError } from '../api/client'
 import type { ModuleMethodSpec } from '../api/types'
+import { useToast } from '../context/ToastContext'
 import { Button } from './Button'
 import { Checkbox } from './Checkbox'
 import { PersonalitySelect } from './PersonalitySelect'
 import { Slider } from './Slider'
+import { SupportedPidSelect } from './SupportedPidSelect'
 import { TextField } from './TextField'
 
 export interface MethodFormProps {
@@ -19,9 +21,9 @@ type ParamValue = boolean | number | string
 function defaultValueFor(kind: string, fallback: ParamValue | null, min: number | null): ParamValue {
   if (fallback !== null && fallback !== undefined) return fallback
   if (kind === 'bool') return false
-  // Enum params (e.g. personality) use 0 as an explicit "nothing selected" sentinel,
+  // Enum and PID-select params both use 0 as an explicit "nothing selected" sentinel,
   // so they must not default to the param's real minimum.
-  if (kind === 'enum') return 0
+  if (kind === 'enum' || kind === 'pid') return 0
   if (kind === 'int') return min ?? 0
   return ''
 }
@@ -34,6 +36,7 @@ export function MethodForm({ uid, moduleName, method, onSuccess }: MethodFormPro
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const { showToast } = useToast()
 
   const setParam = (index: number, value: ParamValue) => {
     setValues((prev) => prev.map((v, i) => (i === index ? value : v)))
@@ -48,7 +51,9 @@ export function MethodForm({ uid, moduleName, method, onSuccess }: MethodFormPro
       setResult(JSON.stringify(response.result))
       onSuccess?.()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Method call failed')
+      const message = err instanceof ApiError ? err.message : 'Method call failed'
+      setError(message)
+      showToast(`${method.name}: ${message}`)
     } finally {
       setSubmitting(false)
     }
@@ -66,8 +71,8 @@ export function MethodForm({ uid, moduleName, method, onSuccess }: MethodFormPro
     >
       <div className="method-form-header">
         <h4>{method.name}</h4>
-        <Button type="submit" disabled={submitting || disabled}>
-          {submitting ? 'Running…' : 'Run'}
+        <Button type="submit" disabled={submitting || disabled} loading={submitting}>
+          Run
         </Button>
       </div>
       {disabled && <p className="method-form-unsupported">Not supported by this device</p>}
@@ -88,6 +93,18 @@ export function MethodForm({ uid, moduleName, method, onSuccess }: MethodFormPro
         if (param.kind === 'enum') {
           return (
             <PersonalitySelect
+              key={param.name}
+              uid={uid}
+              label={param.name}
+              value={typeof value === 'number' ? value : 0}
+              onChange={(v) => setParam(index, v)}
+              disabled={disabled}
+            />
+          )
+        }
+        if (param.kind === 'pid') {
+          return (
+            <SupportedPidSelect
               key={param.name}
               uid={uid}
               label={param.name}

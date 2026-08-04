@@ -5,9 +5,9 @@ universes and managing RDM devices. It provides packet encoding and decoding,
 serial transport, RDM discovery, request/response correlation, retry policies,
 device parameter APIs, and high-level network lifecycle management.
 
-The project currently targets ENTTEC DMX USB Pro and DMX USB Pro Mk2
-interfaces. DMXKing adapter types are present as extension points, but their
-framing implementation is not yet complete.
+The project currently targets the ENTTEC DMX USB Pro interface. DMXKing
+adapter types are present as extension points, but their framing
+implementation is not yet complete.
 
 > **Project status:** Alpha. The public API may change before the first stable
 > release.

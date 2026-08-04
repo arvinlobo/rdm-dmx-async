@@ -6,8 +6,14 @@ from rdm_dmx_async.application.network_manager import NetworkConfig, NetworkMana
 from rdm_dmx_async.transport.interface_adapter import InterfaceType
 from rdm_dmx_async.utils import list_available_ports
 
-from ..dependencies import get_network_manager
-from ..schemas import ConnectRequest, OkResponse, PortListResponse, StatusResponse
+from ..dependencies import get_network_manager, parse_uid
+from ..schemas import (
+    ConnectRequest,
+    InterfaceTypeListResponse,
+    OkResponse,
+    PortListResponse,
+    StatusResponse,
+)
 
 router = APIRouter(prefix="/network", tags=["network"])
 
@@ -15,6 +21,11 @@ router = APIRouter(prefix="/network", tags=["network"])
 @router.get("/ports", response_model=PortListResponse)
 def get_ports() -> PortListResponse:
     return PortListResponse(ports=list_available_ports())
+
+
+@router.get("/interface-types", response_model=InterfaceTypeListResponse)
+def get_interface_types() -> InterfaceTypeListResponse:
+    return InterfaceTypeListResponse(interface_types=[t.name for t in InterfaceType])
 
 
 @router.get("/status", response_model=StatusResponse)
@@ -44,9 +55,19 @@ async def connect(request: Request, body: ConnectRequest = ConnectRequest()) -> 
             status_code=400, detail=f"Unknown interface_type: {body.interface_type!r}"
         ) from exc
 
-    config = NetworkConfig(port=body.port, interface_type=interface_type)
+    controller_uid = parse_uid(body.controller_uid) if body.controller_uid else None
+
+    config = NetworkConfig(
+        port=body.port, interface_type=interface_type, controller_uid=controller_uid
+    )
     manager = NetworkManager(config)
-    await manager.start()
+    try:
+        await manager.start()
+    except Exception as exc:
+        # A bare exception here would produce a plain 500 that bypasses
+        # CORSMiddleware's header injection, which browsers then misreport
+        # as a CORS failure instead of surfacing the real error.
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     request.app.state.network_manager = manager
 
     return StatusResponse(connected=True, port=manager.config.port, device_count=0)

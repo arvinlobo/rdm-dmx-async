@@ -4,9 +4,14 @@ export interface PortListResponse {
   ports: string[]
 }
 
+export interface InterfaceTypeListResponse {
+  interface_types: string[]
+}
+
 export interface ConnectRequest {
   port?: string | null
   interface_type?: string
+  controller_uid?: string | null
 }
 
 export interface StatusResponse {
@@ -46,7 +51,7 @@ export interface CapabilityReport {
   modules: Record<string, ModuleSupport>
 }
 
-export type ParamKind = 'int' | 'str' | 'bool' | 'enum' | 'unknown'
+export type ParamKind = 'int' | 'str' | 'bool' | 'enum' | 'pid' | 'unknown'
 
 export interface ModuleParamSpec {
   name: string
@@ -87,6 +92,15 @@ export interface PersonalityListResponse {
   options: PersonalityOption[]
 }
 
+export interface SupportedPidOption {
+  pid: number
+  name: string
+}
+
+export interface SupportedPidListResponse {
+  options: SupportedPidOption[]
+}
+
 /** A sensor's live value merged with its static definition, for display. */
 export interface SensorReading {
   sensor_number: number
@@ -111,6 +125,8 @@ export interface SensorReadingsResponse {
 export interface DmxSendRequest {
   channels: number[]
   port?: number
+  /** Keep re-transmitting this frame in the background until overwritten/stopped. Default false. */
+  repeat?: boolean
 }
 
 /** Human-friendly labels for the 16 device API modules (matches API_PID_MAPPING keys). */
@@ -132,4 +148,35 @@ export const MODULE_LABELS: Record<string, string> = {
   presets: 'Preset Control',
   system: 'System Info',
   proxy: 'Proxy',
+}
+
+/** Groups modules into dashboard sections so related cards are shown together. */
+export const MODULE_CATEGORIES: Record<string, string> = {
+  device_label: 'Identity',
+  info: 'Identity',
+  system: 'Identity',
+  dmx_config: 'DMX & Addressing',
+  slots: 'DMX & Addressing',
+  modes: 'DMX & Addressing',
+  position: 'DMX & Addressing',
+  proxy: 'DMX & Addressing',
+  control: 'Output Control',
+  lamp: 'Output Control',
+  power: 'Output Control',
+  self_test: 'Output Control',
+  presets: 'Output Control',
+  maintenance: 'Maintenance',
+  display: 'Maintenance',
+  sensors: 'Sensors',
+}
+
+export const MODULE_CATEGORY_ORDER = ['Identity', 'DMX & Addressing', 'Output Control', 'Maintenance', 'Sensors']
+
+/** CSS class suffix used for a per-category accent color (left border, icon tint). */
+export const MODULE_CATEGORY_ACCENTS: Record<string, string> = {
+  Identity: 'category-identity',
+  'DMX & Addressing': 'category-dmx',
+  'Output Control': 'category-control',
+  Maintenance: 'category-maintenance',
+  Sensors: 'category-sensors',
 }

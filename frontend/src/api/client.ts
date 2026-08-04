@@ -5,6 +5,7 @@ import type {
   ConnectRequest,
   DiscoverResponse,
   DmxSendRequest,
+  InterfaceTypeListResponse,
   MethodCallResponse,
   ModuleSchema,
   OkResponse,
@@ -12,6 +13,7 @@ import type {
   PortListResponse,
   SensorReadingsResponse,
   StatusResponse,
+  SupportedPidListResponse,
 } from './types'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
@@ -33,6 +35,9 @@ export class ApiError extends Error {
 // Serializing here means each request completes (or fails) on its own
 // timeout budget instead of starving behind unrelated in-flight calls.
 let requestQueue: Promise<unknown> = Promise.resolve()
+
+const personalitiesCache = new Map<string, Promise<PersonalityListResponse>>()
+const supportedPidsCache = new Map<string, Promise<SupportedPidListResponse>>()
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const run = async () => {
@@ -67,6 +72,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   getPorts: () => request<PortListResponse>('/network/ports'),
+  getInterfaceTypes: () => request<InterfaceTypeListResponse>('/network/interface-types'),
   getStatus: () => request<StatusResponse>('/network/status'),
   connect: (body: ConnectRequest = {}) =>
     request<StatusResponse>('/network/connect', { method: 'POST', body: JSON.stringify(body) }),
@@ -89,10 +95,29 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ args }),
     }),
-  getPersonalities: (uid: string) =>
-    request<PersonalityListResponse>(`/devices/${uid}/modules/dmx_config/personalities`),
+  getPersonalities: (uid: string) => {
+    // Each personality's description is its own RDM round trip (PID DMX_PERSONALITY_DESCRIPTION
+    // has no "get all" form), so this list is expensive - up to ~20 RDM transactions. The set of
+    // descriptions is static per device, so cache per uid instead of refetching on every mount
+    // (e.g. every `set_personality`/`get_personality_description` form remounting after a run).
+    const cached = personalitiesCache.get(uid)
+    if (cached) return cached
+    const result = request<PersonalityListResponse>(`/devices/${uid}/modules/dmx_config/personalities`)
+    personalitiesCache.set(uid, result)
+    result.catch(() => personalitiesCache.delete(uid))
+    return result
+  },
   getSensorReadings: (uid: string) =>
     request<SensorReadingsResponse>(`/devices/${uid}/modules/sensors/readings`),
+  getSupportedPids: (uid: string) => {
+    // Same static-per-device, expensive-to-refetch reasoning as getPersonalities above.
+    const cached = supportedPidsCache.get(uid)
+    if (cached) return cached
+    const result = request<SupportedPidListResponse>(`/devices/${uid}/modules/system/supported-pids`)
+    supportedPidsCache.set(uid, result)
+    result.catch(() => supportedPidsCache.delete(uid))
+    return result
+  },
 
   sendDmx: (body: DmxSendRequest) =>
     request<OkResponse>('/dmx/send', { method: 'POST', body: JSON.stringify(body) }),

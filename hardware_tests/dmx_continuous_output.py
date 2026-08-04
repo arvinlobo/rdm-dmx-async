@@ -3,11 +3,12 @@ DMX Output Example (static hold + fade)
 
 Demonstrates DMX output using rdm_dmx_async.NetworkManager.
 
-Note: NetworkManager.send_dmx() lazily starts a background DmxFrameScheduler
-that keeps re-transmitting the last buffer automatically (~40 Hz). A single
-send_dmx() call is enough to hold a static level - no manual send loop is
-needed. The 'fade' mode below still loops manually because it needs to push
-genuinely new (changing) values at each step.
+Note: NetworkManager.send_dmx(repeat=True) starts a background
+DmxFrameScheduler that keeps re-transmitting the last buffer automatically
+(~40 Hz). A single send_dmx(repeat=True) call is enough to hold a static
+level - no manual send loop is needed. The 'fade' mode below still loops
+manually because it needs to push genuinely new (changing) values at each
+step.
 
 Usage:
     python dmx_continuous_output.py [--port COM3] [--address 1] [--duration 10]
@@ -86,10 +87,10 @@ class ContinuousDMXController:
             min(start_address + 7, 512),
         )
 
-        # send_dmx() lazily starts a background scheduler that keeps
+        # send_dmx(repeat=True) starts a background scheduler that keeps
         # re-transmitting this buffer automatically - one call is enough
         # to hold the level for the full duration.
-        await self.manager.send_dmx(bytes(dmx_universe))
+        await self.manager.send_dmx(bytes(dmx_universe), repeat=True)
         await asyncio.sleep(duration)
 
         # Turn off

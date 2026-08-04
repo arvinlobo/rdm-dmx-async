@@ -318,7 +318,7 @@ class RDME120Protocol:
                 # Send packet
                 await self._transport.send(packet_bytes, self._SERIAL_DESTINATION)
 
-                self._logger.info(
+                self._logger.debug(
                     f"[TX_RDM] Sent {request.command_class.name} "
                     f"TXN={request.transaction_number} "
                     f"PID={request.pid:#x} to UID={request.destination_uid:012X}"
@@ -332,7 +332,7 @@ class RDME120Protocol:
             if not is_valid:
                 self._logger.warning(f"Response validation warning: {error}")
 
-            self._logger.info(
+            self._logger.debug(
                 f"[TX_RDM] Received response TXN={response.transaction_number} "
                 f"type={response.response_type.name} (elapsed: {timeout:.2f}s max)"
             )
@@ -359,18 +359,21 @@ class RDME120Protocol:
                     # Receive packet with timeout
                     data, _ = await self._transport.receive(timeout=0.1)
 
-                    self._logger.info(
+                    self._logger.debug(
                         "[RX_LOOP] Received %d bytes: %s",
                         len(data),
                         " ".join(f"{b:02X}" for b in data[:12]),
                     )
 
                     # Check if this is Manchester-encoded discovery response
-                    # Discovery responses start with preamble: 0xFE 0xFE 0xFE...
-                    if len(data) >= 7 and data[0:7] == b"\xfe" * 7:
+                    # Discovery responses start with preamble: 0xFE (0-7 bytes,
+                    # widget/interface dependent) - never the start of a normal
+                    # RDM response (0xCC), so a single leading 0xFE is enough
+                    # to route it to the discovery queue.
+                    if data[:1] == b"\xfe":
                         # Route Manchester data to discovery queue (bypass correlator)
                         await self._discovery_queue.put(data)
-                        self._logger.info(
+                        self._logger.debug(
                             "[DISCOVERY] Routed Manchester response to discovery queue"
                         )
                         continue
@@ -382,7 +385,7 @@ class RDME120Protocol:
                         self._logger.debug("[RX_LOOP] Failed to decode response")
                         continue  # Not a valid RDM response
 
-                    self._logger.info(
+                    self._logger.debug(
                         f"[RX_RDM] Decoded response TXN={response.transaction_number} "
                         f"from UID={response.source_uid:012X} type={response.response_type.name} PID={response.pid:#x}"
                     )

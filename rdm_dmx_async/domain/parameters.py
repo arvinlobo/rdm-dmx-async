@@ -97,3 +97,46 @@ class StandardPID(IntEnum):
     def to_pid(cls, value: int) -> PID:
         """Convert enum value to PID type"""
         return PID(value)
+
+
+# ANSI E1.20 Table A-14: SENSOR_DEFINITION's PREFIX field -> power-of-ten exponent.
+# The wire value is not the exponent itself (it jumps from YOCTO=0x0A to DECA=0x11,
+# skipping 0x0B-0x10), so this map is the authoritative conversion - not `10**prefix`.
+_SENSOR_PREFIX_EXPONENT: dict[int, int] = {
+    0x00: 0,  # NONE
+    0x01: -1,  # DECI
+    0x02: -2,  # CENTI
+    0x03: -3,  # MILLI
+    0x04: -6,  # MICRO
+    0x05: -9,  # NANO
+    0x06: -12,  # PICO
+    0x07: -15,  # FEMTO
+    0x08: -18,  # ATTO
+    0x09: -21,  # ZEPTO
+    0x0A: -24,  # YOCTO
+    0x11: 1,  # DECA
+    0x12: 2,  # HECTO
+    0x13: 3,  # KILO
+    0x14: 6,  # MEGA
+    0x15: 9,  # GIGA
+    0x16: 12,  # TERA
+    0x17: 15,  # PETA
+    0x18: 18,  # EXA
+    0x19: 21,  # ZETTA
+    0x1A: 24,  # YOTTA
+}
+
+
+def sensor_prefix_exponent(prefix: int) -> int:
+    """Power-of-ten exponent for a SENSOR_DEFINITION PREFIX value (unknown -> 0)."""
+    return _SENSOR_PREFIX_EXPONENT.get(prefix, 0)
+
+
+def sensor_prefix_factor(prefix: int) -> float:
+    """Multiplier that converts a raw sensor value into its real engineering value."""
+    return 10.0 ** sensor_prefix_exponent(prefix)
+
+
+def sensor_prefix_decimals(prefix: int) -> int:
+    """Decimal places implied by a SENSOR_DEFINITION PREFIX, for display rounding."""
+    return max(0, -sensor_prefix_exponent(prefix))

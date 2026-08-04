@@ -21,3 +21,9 @@ export function hsvToRgb(h: number, s: number, v: number): { r: number; g: numbe
     b: Math.round((bp + m) * 255),
   }
 }
+
+/** Formats 0-255 RGB channel values as a `#rrggbb` hex string. */
+export function rgbToHex(r: number, g: number, b: number): string {
+  const channel = (n: number) => Math.round(Math.min(255, Math.max(0, n))).toString(16).padStart(2, '0')
+  return `#${channel(r)}${channel(g)}${channel(b)}`
+}

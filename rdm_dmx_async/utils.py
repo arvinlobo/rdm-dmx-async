@@ -52,7 +52,7 @@ async def get_enttec_serial_uid(
         port: Serial port (e.g., "COM3")
         baudrate: Baud rate (default 250000)
         timeout: Timeout in seconds
-        adapter: Interface adapter (creates default Enttec Mk2 adapter if None)
+        adapter: Interface adapter (creates default Enttec adapter if None)
 
     Returns:
         UID constructed from Enttec manufacturer ID (0x454E) + serial number,
@@ -63,7 +63,7 @@ async def get_enttec_serial_uid(
         # Returns UID like 0x454E02192718
     """
     if adapter is None:
-        adapter = EnttecAdapter(port, use_mk2_protocol=True)
+        adapter = EnttecAdapter(port)
 
     for attempt in range(1, _WIDGET_QUERY_ATTEMPTS + 1):
         try:
@@ -116,7 +116,7 @@ async def get_enttec_widget_params(
         port: Serial port
         baudrate: Baud rate
         timeout: Timeout in seconds
-        adapter: Interface adapter (creates default Enttec Mk2 adapter if None)
+        adapter: Interface adapter (creates default Enttec adapter if None)
 
     Returns:
         Dictionary with widget parameters or None if failed:
@@ -130,7 +130,7 @@ async def get_enttec_widget_params(
         }
     """
     if adapter is None:
-        adapter = EnttecAdapter(port, use_mk2_protocol=True)
+        adapter = EnttecAdapter(port)
 
     try:
         # Use raw serial communication for Enttec commands

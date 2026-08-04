@@ -107,7 +107,7 @@ def test_dmx_send_forwards_channels_to_manager(app, client):
     response = client.post("/dmx/send", json={"channels": [255, 0, 128], "port": 2})
     assert response.status_code == 200
     assert response.json() == {"success": True}
-    manager.send_dmx.assert_awaited_once_with(bytes([255, 0, 128]), port=2)
+    manager.send_dmx.assert_awaited_once_with(bytes([255, 0, 128]), port=2, repeat=False)
 
 
 def test_list_devices(app, client):

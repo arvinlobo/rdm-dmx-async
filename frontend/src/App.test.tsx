@@ -7,6 +7,7 @@ vi.mock('./api/client', () => ({
   api: {
     getStatus: vi.fn(),
     getPorts: vi.fn(),
+    getInterfaceTypes: vi.fn(),
     connect: vi.fn(),
     disconnect: vi.fn(),
     listDevices: vi.fn(),
@@ -63,6 +64,9 @@ describe('App', () => {
   beforeEach(() => {
     vi.mocked(api.getStatus).mockReset().mockResolvedValue(CONNECTED_STATUS)
     vi.mocked(api.getPorts).mockReset().mockResolvedValue({ ports: ['COM5'] })
+    vi.mocked(api.getInterfaceTypes).mockReset().mockResolvedValue({
+      interface_types: ['ENTTEC_USB_PRO', 'DMXKING_ULTRA_DMX', 'BARE_USB_RS485'],
+    })
     vi.mocked(api.listDevices).mockReset().mockResolvedValue({ devices: [DEVICE_A, DEVICE_B] })
     vi.mocked(api.getCapabilities).mockReset()
     vi.mocked(api.getModuleSchema).mockReset().mockResolvedValue({ module: 'x', methods: [] })

@@ -46,6 +46,11 @@ class RetryPolicy:
     delay_between_attempts: float = 0.0
     timeout: float = 3.0
 
+    # Per ANSI E1.20, an ACK_TIMER response means the device needs more time;
+    # the controller polls QUEUED_MESSAGE up to this many times (waiting the
+    # device-indicated delay before each poll) before giving up on that attempt.
+    max_ack_timer_polls: int = 3
+
     permanent_failures: set[NAKReason] = field(
         default_factory=lambda: {
             NAKReason.UNKNOWN_PID,
@@ -69,6 +74,8 @@ class RetryPolicy:
             raise ValueError("timeout must be positive")
         if self.delay_between_attempts < 0:
             raise ValueError("delay_between_attempts cannot be negative")
+        if self.max_ack_timer_polls < 1:
+            raise ValueError("max_ack_timer_polls must be at least 1")
 
     def is_permanent_failure(self, nak_reason: NAKReason) -> bool:
         """

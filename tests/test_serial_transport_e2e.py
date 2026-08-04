@@ -158,12 +158,12 @@ def _build_dub_manchester_frame(uid: bytes) -> bytes:
 @pytest.mark.asyncio
 class TestEnttecUsbProSerialTransportEndToEnd:
     """
-    Real transport stack (AsyncSerialTransport + EnttecAdapter, non-Mk2 USB
+    Real transport stack (AsyncSerialTransport + EnttecAdapter, original USB
     DMX PRO framing) driven against a fake serial port standing in for hardware.
     """
 
     async def test_get_command_success_round_trip(self, fake_serial_instances):
-        adapter = EnttecAdapter("COM_FAKE", use_mk2_protocol=False)
+        adapter = EnttecAdapter("COM_FAKE")
         transport = AsyncSerialTransport(adapter)
 
         async with transport:
@@ -179,7 +179,7 @@ class TestEnttecUsbProSerialTransportEndToEnd:
                     command_class=CommandClass.GET_COMMAND_RESPONSE,
                     data=b"\x2a",
                 )
-                # Original (non-Mk2) USB Pro format: status byte + RDM data
+                # Original USB Pro format: status byte + RDM data
                 fake.queue_response(EnttecMessageType.RECEIVED_DMX_PACKET, b"\x00" + response_rdm)
 
             fake.on_frame = respond
@@ -203,7 +203,7 @@ class TestEnttecUsbProSerialTransportEndToEnd:
                 await protocol.stop()
 
     async def test_get_command_timeout_raises(self, fake_serial_instances):
-        adapter = EnttecAdapter("COM_FAKE", use_mk2_protocol=False)
+        adapter = EnttecAdapter("COM_FAKE")
         transport = AsyncSerialTransport(adapter)
 
         async with transport:
@@ -224,7 +224,7 @@ class TestEnttecUsbProSerialTransportEndToEnd:
                 await protocol.stop()
 
     async def test_discovery_unique_branch_decodes_uid(self, fake_serial_instances):
-        adapter = EnttecAdapter("COM_FAKE", use_mk2_protocol=False)
+        adapter = EnttecAdapter("COM_FAKE")
         transport = AsyncSerialTransport(adapter)
 
         async with transport:
@@ -234,7 +234,7 @@ class TestEnttecUsbProSerialTransportEndToEnd:
                 if label != EnttecMessageType.SEND_RDM_DISCOVERY:
                     return
                 dub_frame = _build_dub_manchester_frame(int(DEVICE_UID).to_bytes(6, "big"))
-                # Discovery responses use the original status+data format on both variants.
+                # Discovery responses use the original status+data format.
                 fake.queue_response(EnttecMessageType.RECEIVED_DMX_PACKET, b"\x00" + dub_frame)
 
             fake.on_frame = respond
@@ -262,7 +262,7 @@ class TestEnttecUsbProSerialTransportEndToEnd:
         """Simulates the response frame trickling in over two separate
         serial reads (e.g. slow UART pacing), rather than arriving whole in
         a single read - the real-world "middle bytes arrive later" case."""
-        adapter = EnttecAdapter("COM_FAKE", use_mk2_protocol=False)
+        adapter = EnttecAdapter("COM_FAKE")
         transport = AsyncSerialTransport(adapter)
 
         async with transport:
@@ -321,7 +321,7 @@ class TestEnttecUsbProSerialTransportEndToEnd:
     async def test_transport_receive_times_out_with_no_response(self, fake_serial_instances):
         """Exercises AsyncSerialTransport.receive()'s own timeout directly,
         independent of the higher ProtocolTimeoutError layer."""
-        adapter = EnttecAdapter("COM_FAKE", use_mk2_protocol=False)
+        adapter = EnttecAdapter("COM_FAKE")
         transport = AsyncSerialTransport(adapter)
 
         async with transport:
@@ -331,7 +331,7 @@ class TestEnttecUsbProSerialTransportEndToEnd:
     async def test_transport_receive_returns_once_data_arrives_within_timeout(
         self, fake_serial_instances
     ):
-        adapter = EnttecAdapter("COM_FAKE", use_mk2_protocol=False)
+        adapter = EnttecAdapter("COM_FAKE")
         transport = AsyncSerialTransport(adapter)
 
         async with transport:

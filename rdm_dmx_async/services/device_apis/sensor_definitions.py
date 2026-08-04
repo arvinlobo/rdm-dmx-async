@@ -3,7 +3,7 @@
 import struct
 from typing import TYPE_CHECKING
 
-from ...domain.parameters import StandardPID
+from ...domain.parameters import StandardPID, sensor_prefix_decimals, sensor_prefix_factor
 
 if TYPE_CHECKING:
     from ..rdm_device import RdmDevice
@@ -34,15 +34,24 @@ class SensorDefinitionsAPI:
         )
 
         if response_data and len(response_data) >= 13:
+            prefix = response_data[3]
+            # Range/normal values are in the sensor's own units, scaled by its own
+            # PREFIX field (ANSI E1.20) - not a fixed divisor.
+            factor = sensor_prefix_factor(prefix)
+            decimals = sensor_prefix_decimals(prefix)
+            range_min = struct.unpack(">h", bytes(response_data[4:6]))[0]
+            range_max = struct.unpack(">h", bytes(response_data[6:8]))[0]
+            normal_min = struct.unpack(">h", bytes(response_data[8:10]))[0]
+            normal_max = struct.unpack(">h", bytes(response_data[10:12]))[0]
             sensor_def = {
                 "sensor_number": response_data[0],
                 "type": response_data[1],
                 "unit": response_data[2],
-                "prefix": response_data[3],
-                "range_min": struct.unpack(">h", bytes(response_data[4:6]))[0],
-                "range_max": struct.unpack(">h", bytes(response_data[6:8]))[0],
-                "normal_min": struct.unpack(">h", bytes(response_data[8:10]))[0],
-                "normal_max": struct.unpack(">h", bytes(response_data[10:12]))[0],
+                "prefix": prefix,
+                "range_min": round(range_min * factor, decimals),
+                "range_max": round(range_max * factor, decimals),
+                "normal_min": round(normal_min * factor, decimals),
+                "normal_max": round(normal_max * factor, decimals),
                 "supports_recording": response_data[12] & 0x01,
                 "description": response_data[13:].decode("utf-8", errors="ignore").strip("\x00")
                 if len(response_data) > 13
@@ -76,6 +85,19 @@ class SensorDefinitionsAPI:
 
         self._cached_definitions = definitions
         return definitions
+
+    def get_cached_definition(self, sensor_number: int) -> dict | None:
+        """Look up a sensor's definition from the cache without an RDM round-trip.
+
+        Returns None if `get_all_sensor_definitions()` hasn't been called yet
+        (or the cache was invalidated), rather than triggering a live fetch.
+        """
+        if not self._cached_definitions:
+            return None
+        for definition in self._cached_definitions:
+            if definition["sensor_number"] == sensor_number:
+                return definition
+        return None
 
     def invalidate_cache(self) -> None:
         """Discard the cached collection of sensor definitions."""

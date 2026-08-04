@@ -2,7 +2,7 @@
 Interface adapter abstraction for different hardware interfaces.
 
 This module provides the adapter pattern to support multiple hardware
-interfaces (Enttec, DMXKing, Art-Net, etc.) without changing the core
+interfaces (Enttec, DMXKing, etc.) without changing the core
 transport or protocol layers.
 
 Concrete adapter implementations live under `transport.adapters` (one module
@@ -41,9 +41,9 @@ class InterfaceType(StrEnum):
     """Supported hardware interface types"""
 
     ENTTEC_USB_PRO = "enttec_usb_pro"
-    ENTTEC_USB_PRO_MK2 = "enttec_usb_pro_mk2"
     DMXKING_ULTRA_DMX = "dmxking_ultra_dmx"
     GENERIC_SERIAL = "generic_serial"
+    BARE_USB_RS485 = "bare_usb_rs485"
     CUSTOM = "custom"
 
 
@@ -72,6 +72,20 @@ class InterfaceAdapter(ABC):
     def serial_config(self) -> SerialConfig:
         """Return serial configuration for this adapter"""
         pass
+
+    @property
+    def requires_manual_break(self) -> bool:
+        """
+        Whether the transport must manually toggle the UART break condition
+        before writing each frame.
+
+        Purpose-built widgets (Enttec, DMXKing) generate the DMX BREAK/MAB
+        signal in their own firmware, so this is False for them. Bare
+        USB-RS485 dongles with no onboard framing rely on
+        the host toggling `Serial.break_condition` to produce the BREAK
+        signal on the wire - see `AsyncSerialTransport._tx_loop`.
+        """
+        return False
 
     @abstractmethod
     def frame_rdm_request(self, rdm_data: bytes, port: int = 1) -> bytes:

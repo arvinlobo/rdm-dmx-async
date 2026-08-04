@@ -14,5 +14,5 @@ router = APIRouter(prefix="/dmx", tags=["dmx"])
 async def send_dmx(
     body: DmxSendRequest, manager: NetworkManager = Depends(get_network_manager)
 ) -> OkResponse:
-    await manager.send_dmx(bytes(body.channels), port=body.port)
+    await manager.send_dmx(bytes(body.channels), port=body.port, repeat=body.repeat)
     return OkResponse()

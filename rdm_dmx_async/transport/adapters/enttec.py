@@ -1,5 +1,5 @@
 """
-Adapter for Enttec USB Pro and USB Pro Mk2 interfaces.
+Adapter for the Enttec USB Pro interface.
 """
 
 import logging
@@ -34,7 +34,7 @@ class EnttecMessageType(IntEnum):
 
 class EnttecAdapter(InterfaceAdapter):
     """
-    Adapter for Enttec USB Pro and USB Pro Mk2 interfaces.
+    Adapter for the Enttec USB Pro interface.
 
     Protocol (API v1.44):
     - START: 0x7E
@@ -48,9 +48,7 @@ class EnttecAdapter(InterfaceAdapter):
     - Version 2 (MSB=2): RDM firmware (controller/responder)
     - Version 3 (MSB=3): RDM Sniffer firmware
 
-    Key differences:
-    - USB Pro (RDM fw): Uses label 7 for regular RDM, label 11 for discovery
-    - USB Pro Mk2: Uses label 7 for all RDM, responds with label 5 (includes port byte)
+    Uses label 7 for regular RDM, label 11 for discovery.
 
     For received packets (label 5):
     - First byte is status: 0=valid, nonzero=error (bit 0=queue overflow, bit 1=overrun)
@@ -60,16 +58,14 @@ class EnttecAdapter(InterfaceAdapter):
     START_OF_MESSAGE = 0x7E
     END_OF_MESSAGE = 0xE7
 
-    def __init__(self, port: str, use_mk2_protocol: bool = True):
+    def __init__(self, port: str):
         """
         Initialize Enttec adapter.
 
         Args:
             port: COM port (e.g., "COM3" on Windows, "/dev/ttyUSB0" on Linux)
-            use_mk2_protocol: True for USB Pro Mk2, False for original USB Pro
         """
         self._port = port
-        self._use_mk2 = use_mk2_protocol
         self._logger = logger
 
     @property
@@ -89,20 +85,18 @@ class EnttecAdapter(InterfaceAdapter):
 
     @property
     def interface_type(self) -> InterfaceType:
-        """Return the ENTTEC USB Pro variant configured for this adapter."""
-        return InterfaceType.ENTTEC_USB_PRO_MK2 if self._use_mk2 else InterfaceType.ENTTEC_USB_PRO
+        """Return this adapter's interface identifier."""
+        return InterfaceType.ENTTEC_USB_PRO
 
     def frame_rdm_request(self, rdm_data: bytes, port: int = 1) -> bytes:
         """
         Frame regular RDM request (not discovery).
 
-        Both USB Pro and Mk2 use message type 7 for regular RDM.
-        Mk2 does not include port byte; original USB Pro may support it.
+        Uses message type 7 for regular RDM (no port byte in data).
         """
         # Message type 7 for regular RDM requests
         message_type = EnttecMessageType.SEND_RDM_PACKET
 
-        # Both use same format for type 7 (no port byte in data)
         data = rdm_data
 
         framed = self._frame_message(message_type, data)
@@ -117,9 +111,8 @@ class EnttecAdapter(InterfaceAdapter):
         """
         Frame RDM Discovery Request (DISC_UNIQUE_BRANCH, DISC_MUTE, DISC_UN_MUTE).
 
-        Both USB Pro (RDM firmware) and USB Pro Mk2 use message type 11
-        specifically for discovery requests to receive the special discovery
-        response format (which has no break).
+        Uses message type 11 specifically for discovery requests to receive
+        the special discovery response format (which has no break).
         """
         # ALWAYS use label 11 for discovery packets
         message_type = EnttecMessageType.SEND_RDM_DISCOVERY
@@ -136,21 +129,18 @@ class EnttecAdapter(InterfaceAdapter):
         """
         Parse RDM response from Enttec format.
 
-        Both USB Pro and Mk2 return message type 5 (RECEIVED_DMX_PACKET) for RDM responses.
-        Format of message type 5:
+        Message type 5 (RECEIVED_DMX_PACKET) is used for RDM responses:
         - Byte 0: Status (0=valid, nonzero=error)
         - Bytes 1+: DMX/RDM data (start code + payload)
-
-        For Mk2, there may be an additional port byte before status.
         """
-        self._logger.info(f"[PARSE_CALL] Called with {len(raw_data)} bytes")
+        self._logger.debug(f"[PARSE_CALL] Called with {len(raw_data)} bytes")
 
         if len(raw_data) < 5:  # START + LABEL + LEN(2) + END
-            self._logger.info("[PARSE_CALL] Too short")
+            self._logger.debug("[PARSE_CALL] Too short")
             return None
 
         if raw_data[0] != self.START_OF_MESSAGE:
-            self._logger.info(f"[PARSE_CALL] Bad start: 0x{raw_data[0]:02X}")
+            self._logger.debug(f"[PARSE_CALL] Bad start: 0x{raw_data[0]:02X}")
             return None
 
         message_type = raw_data[1]
@@ -159,19 +149,19 @@ class EnttecAdapter(InterfaceAdapter):
         # Check if we have enough bytes for this frame
         frame_len = 5 + data_len  # START + LABEL + LEN(2) + DATA + END
         if len(raw_data) < frame_len:
-            self._logger.info(
+            self._logger.debug(
                 f"[PARSE_CALL] Incomplete frame: need {frame_len}, have {len(raw_data)}"
             )
             return None
 
         # Check END marker at correct position
         if raw_data[frame_len - 1] != self.END_OF_MESSAGE:
-            self._logger.info(
+            self._logger.debug(
                 f"[PARSE_CALL] Bad end at position {frame_len - 1}: 0x{raw_data[frame_len - 1]:02X}"
             )
             return None
 
-        self._logger.info(f"[PARSE_CALL] message_type=0x{message_type:02X}, data_len={data_len}")
+        self._logger.debug(f"[PARSE_CALL] message_type=0x{message_type:02X}, data_len={data_len}")
         data_len = raw_data[2] | (raw_data[3] << 8)
         data = raw_data[4 : 4 + data_len]
 
@@ -180,61 +170,23 @@ class EnttecAdapter(InterfaceAdapter):
             if len(data) < 2:  # Need at least status + start code
                 return None
 
-            # Check if this is a discovery response (Manchester-encoded collision data)
-            # Discovery responses start with preamble: 0xFE 0xFE 0xFE...
-            # They use original format (status+data) even on Mk2
-            is_discovery_response = len(data) >= 4 and data[1:4] == b"\xfe\xfe\xfe"
+            # First byte is status, remaining bytes are DMX/RDM data (start
+            # code + payload) - this covers discovery responses (preamble
+            # 0xFE 0xFE 0xFE...) and standard RDM responses (0x00 0xCC...)
+            # alike.
+            status_byte = data[0]
+            rdm_data = data[1:]
 
-            # Check if this is a standard RDM response (starts with 0x00 0xCC pattern)
-            # MUTE/UNMUTE responses use original format: status(0x00) + RDM(0xCC...)
-            # This is NOT Mk2 format (which would be port + status + RDM)
-            is_standard_rdm = len(data) >= 2 and data[0] == 0x00 and data[1] == 0xCC
+            if status_byte != 0:
+                self._logger.warning(f"[ENTTEC_PARSE] RX error status: 0x{status_byte:02X}")
 
-            # Check if this looks like Mk2 format (port byte + status + data)
-            # or original format (status + data)
-            if (
-                self._use_mk2
-                and len(data) > 2
-                and not is_discovery_response
-                and not is_standard_rdm
-            ):
-                # Mk2: First byte is port, second is status
-                port_byte = data[0]
-                status_byte = data[1]
-                rdm_data = data[2:]
-
-                if status_byte != 0:
-                    self._logger.warning(
-                        f"[ENTTEC_PARSE] RX error status: 0x{status_byte:02X} "
-                        f"(overflow={bool(status_byte & 0x01)}, "
-                        f"overrun={bool(status_byte & 0x02)})"
-                    )
-
-                self._logger.debug(
-                    f"[ENTTEC_PARSE] Type=5 (Mk2), Port={port_byte}, "
-                    f"Status={status_byte}, RDM_len={len(rdm_data)}"
-                )
-                self._logger.info(
-                    f"[ENTTEC_PARSE] Returning RDM data: {' '.join(f'{b:02X}' for b in rdm_data)}"
-                )
-                return rdm_data
-            else:
-                # Original USB Pro OR discovery response: First byte is status
-                status_byte = data[0]
-                rdm_data = data[1:]
-
-                if status_byte != 0:
-                    self._logger.warning(f"[ENTTEC_PARSE] RX error status: 0x{status_byte:02X}")
-
-                parse_type = "Discovery" if is_discovery_response else "Original"
-                self._logger.debug(
-                    f"[ENTTEC_PARSE] Type=5 ({parse_type}), "
-                    f"Status={status_byte}, RDM_len={len(rdm_data)}"
-                )
-                self._logger.info(
-                    f"[ENTTEC_PARSE] Returning RDM data: {' '.join(f'{b:02X}' for b in rdm_data)}"
-                )
-                return rdm_data
+            self._logger.debug(
+                f"[ENTTEC_PARSE] Type=5, Status={status_byte}, RDM_len={len(rdm_data)}"
+            )
+            self._logger.debug(
+                f"[ENTTEC_PARSE] Returning RDM data: {' '.join(f'{b:02X}' for b in rdm_data)}"
+            )
+            return rdm_data
         else:
             # Log unrecognized message types for debugging
             self._logger.debug(
@@ -270,13 +222,9 @@ class EnttecAdapter(InterfaceAdapter):
         # Format: start code (0x00) + DMX data
         data = bytes([0x00]) + dmx_data
 
-        framed = self._frame_message(message_type, data)
-
-        self._logger.debug(
-            f"[ENTTEC_FRAME_DMX] Type={message_type}, "
-            f"Channels={len(dmx_data)}, Frame_len={len(framed)}"
-        )
-        return framed
+        # Not logged: this runs per DMX frame (up to ~40 Hz when repeating),
+        # which would flood the log file even at DEBUG level.
+        return self._frame_message(message_type, data)
 
     def find_frame_length(self, buffer: bytes) -> int:
         """

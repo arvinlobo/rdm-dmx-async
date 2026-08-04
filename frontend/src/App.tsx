@@ -5,18 +5,24 @@ import type { DeviceSummary, StatusResponse } from './api/types'
 import { CapabilityDashboard } from './components/CapabilityDashboard'
 import { DeviceSelector } from './components/DeviceSelector'
 import { DmxSlotPanel } from './components/DmxSlotPanel'
+import type { NetworkConnectConfig } from './components/NetworkPanel'
 import { NetworkPanel } from './components/NetworkPanel'
+import { ThemeToggle } from './components/ThemeToggle'
+import { ThemeProvider } from './context/ThemeContext'
+import { ToastProvider, useToast } from './context/ToastContext'
 
 const EMPTY_STATUS: StatusResponse = { connected: false, port: null, device_count: 0 }
 
-function App() {
+function AppShell() {
   const [status, setStatus] = useState<StatusResponse>(EMPTY_STATUS)
   const [ports, setPorts] = useState<string[]>([])
+  const [interfaceTypes, setInterfaceTypes] = useState<string[]>([])
   const [devices, setDevices] = useState<DeviceSummary[]>([])
   const [selectedUid, setSelectedUid] = useState<string | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [discovering, setDiscovering] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { showToast } = useToast()
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -34,6 +40,14 @@ function App() {
     }
   }, [])
 
+  const refreshInterfaceTypes = useCallback(async () => {
+    try {
+      setInterfaceTypes((await api.getInterfaceTypes()).interface_types)
+    } catch {
+      setInterfaceTypes([])
+    }
+  }, [])
+
   const refreshDevices = useCallback(async () => {
     try {
       setDevices((await api.listDevices()).devices)
@@ -45,7 +59,8 @@ function App() {
   useEffect(() => {
     void refreshStatus()
     void refreshPorts()
-  }, [refreshStatus, refreshPorts])
+    void refreshInterfaceTypes()
+  }, [refreshStatus, refreshPorts, refreshInterfaceTypes])
 
   // Detects the backend losing its connection out from under us (e.g. a dev-server
   // --reload restart, or the serial device being unplugged) so we stop rendering
@@ -64,13 +79,21 @@ function App() {
     }
   }, [status.connected, refreshDevices])
 
-  const handleConnect = async (port: string | null) => {
+  const handleConnect = async (config: NetworkConnectConfig) => {
     setConnecting(true)
     setError(null)
     try {
-      setStatus(await api.connect(port ? { port } : {}))
+      setStatus(
+        await api.connect({
+          ...(config.port ? { port: config.port } : {}),
+          interface_type: config.interfaceType,
+          controller_uid: config.controllerUid,
+        }),
+      )
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to connect')
+      const message = err instanceof ApiError ? err.message : 'Failed to connect'
+      setError(message)
+      showToast(message)
     } finally {
       setConnecting(false)
     }
@@ -82,7 +105,9 @@ function App() {
       await api.disconnect()
       setStatus(EMPTY_STATUS)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to disconnect')
+      const message = err instanceof ApiError ? err.message : 'Failed to disconnect'
+      setError(message)
+      showToast(message)
     }
   }
 
@@ -92,17 +117,44 @@ function App() {
     try {
       setDevices((await api.discoverDevices()).devices)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Discovery failed')
+      const message = err instanceof ApiError ? err.message : 'Discovery failed'
+      setError(message)
+      showToast(message)
     } finally {
       setDiscovering(false)
     }
   }
 
+  const selectedDevice = devices.find((d) => d.uid === selectedUid) ?? null
+
   return (
     <div className="app">
       <header className="app-header">
-        <h1>RDM/DMX Control</h1>
+        <div className="app-header-brand">
+          <span className="app-header-logo" aria-hidden="true">
+            ⏻
+          </span>
+          <h1>RDM/DMX Control</h1>
+        </div>
+        <div className="app-header-actions">
+          <span className={`status-pill${status.connected ? ' status-pill-connected' : ' status-pill-disconnected'}`}>
+            <span className="status-dot" aria-hidden="true" />
+            {status.connected ? `${status.port} · ${status.device_count} device${status.device_count === 1 ? '' : 's'}` : 'Not connected'}
+          </span>
+          <ThemeToggle />
+        </div>
       </header>
+
+      {status.connected && (
+        <nav className="breadcrumb" aria-label="Connection context">
+          <span className="breadcrumb-item">Connected → {status.port}</span>
+          {selectedDevice && (
+            <span className="breadcrumb-item breadcrumb-item-current">
+              Device → {selectedDevice.device_label || selectedDevice.model || selectedDevice.uid}
+            </span>
+          )}
+        </nav>
+      )}
 
       {error && <p className="app-error">{error}</p>}
 
@@ -110,8 +162,9 @@ function App() {
         <NetworkPanel
           status={status}
           ports={ports}
+          interfaceTypes={interfaceTypes}
           connecting={connecting}
-          onConnect={(port) => void handleConnect(port)}
+          onConnect={(config) => void handleConnect(config)}
           onDisconnect={() => void handleDisconnect()}
         />
 
@@ -137,6 +190,16 @@ function App() {
         {selectedUid && <CapabilityDashboard uid={selectedUid} />}
       </main>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <ToastProvider>
+        <AppShell />
+      </ToastProvider>
+    </ThemeProvider>
   )
 }
 

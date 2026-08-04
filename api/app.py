@@ -12,6 +12,7 @@ at "/" from this same process, so a single `uvicorn api.app:app` command runs
 both the API and the UI on one origin/port - no separate Vite server needed.
 """
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -22,9 +23,13 @@ from fastapi.staticfiles import StaticFiles
 
 from rdm_dmx_async.application.network_manager import NetworkManager
 
+from .logging_config import configure_logging
 from .routers import capabilities, devices, dmx, network
 
 _FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+_log_file = configure_logging()
+logging.getLogger(__name__).info("Logging to %s", _log_file)
 
 
 @asynccontextmanager
@@ -48,7 +53,10 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        # Vite auto-increments its port (5173, 5174, ...) if the default is
+        # already in use, so match any localhost dev-server port rather than
+        # hardcoding one.
+        allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
         allow_methods=["*"],
         allow_headers=["*"],
     )

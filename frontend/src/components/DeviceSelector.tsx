@@ -28,8 +28,8 @@ export function DeviceSelector({ devices, selectedUid, onSelect, onDiscover, dis
           ))}
         </select>
       </label>
-      <Button onClick={onDiscover} disabled={discovering} variant="secondary">
-        {discovering ? 'Discovering…' : 'Discover Devices'}
+      <Button onClick={onDiscover} disabled={discovering} variant="secondary" loading={discovering}>
+        Discover Devices
       </Button>
     </section>
   )

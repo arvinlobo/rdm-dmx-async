@@ -81,6 +81,11 @@ class DmxFrameScheduler:
             self._rdm_pause_event.set()
             self._logger.debug("DMX resumed")
 
+    @property
+    def is_running(self) -> bool:
+        """Whether the background frame scheduling loop is currently active."""
+        return self._running
+
     async def start(self) -> None:
         """Start the background frame scheduling loop."""
         if self._running:

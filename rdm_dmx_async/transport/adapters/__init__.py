@@ -8,6 +8,7 @@ means adding a new interface never requires touching an existing adapter's
 file (Open/Closed Principle).
 """
 
+from .bare_usb_rs485 import BareUsbRs485Adapter
 from .dmxking import DMXKingAdapter
 from .enttec import EnttecAdapter, EnttecMessageType
 from .generic_serial import FramingMode, GenericSerialAdapter
@@ -18,4 +19,5 @@ __all__ = [
     "DMXKingAdapter",
     "GenericSerialAdapter",
     "FramingMode",
+    "BareUsbRs485Adapter",
 ]

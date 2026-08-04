@@ -69,6 +69,7 @@ class AsyncTransaction:
         allocator: TransactionNumberAllocator | None = None,
         device_uid: UID | None = None,
         command_label: str | None = None,
+        queued_message_operation: Callable[[int], Awaitable[RDMResponse]] | None = None,
     ):
         """
         Initialize a new async transaction.
@@ -81,12 +82,18 @@ class AsyncTransaction:
             device_uid: Target device UID (optional, for logging)
             command_label: Human-readable command description (e.g. "GET PID=0x60"),
                           included in log messages so failures identify the command
+            queued_message_operation: Async callable (same shape as `operation`) that
+                          issues a GET QUEUED_MESSAGE request. When provided, an
+                          ACK_TIMER response is followed up per ANSI E1.20 instead of
+                          being treated as a plain retry-worthy failure. If omitted,
+                          ACK_TIMER responses fall back to a generic retry.
         """
         self.operation = operation
         self.policy = policy
         self.allocator = allocator or TransactionNumberAllocator()
         self.device_uid = device_uid or UID(0)
         self.command_label = command_label
+        self.queued_message_operation = queued_message_operation
 
         # Transaction state
         self.state = TransactionState.CREATED
@@ -129,7 +136,7 @@ class AsyncTransaction:
 
                 # Check if successful
                 if response and response.response_type == ResponseType.ACK:
-                    logger.info(
+                    logger.debug(
                         f"Transaction succeeded for device {self.device_uid:012X} "
                         f"on attempt {attempt_index + 1}"
                     )
@@ -143,8 +150,7 @@ class AsyncTransaction:
                     # failure short-circuit for the single most common NAK reason.
                     if nak_reason is not None and self.policy.is_permanent_failure(nak_reason):
                         logger.warning(
-                            f"Permanent failure for device {self.device_uid:012X}: "
-                            f"NAK {nak_reason.name}"
+                            f"Permanent failure for {self._device_desc}: NAK {nak_reason.name}"
                         )
                         return self._create_permanent_failure_result(nak_reason)
 
@@ -217,6 +223,14 @@ class AsyncTransaction:
                         f"(not in active set)"
                     )
 
+            if (
+                response is not None
+                and not is_late
+                and response.response_type == ResponseType.ACK_TIMER
+                and self.queued_message_operation is not None
+            ):
+                response = await self._poll_queued_message(response)
+
             success = (
                 response is not None and response.response_type == ResponseType.ACK and not is_late
             )
@@ -253,6 +267,43 @@ class AsyncTransaction:
         logger.debug(str(attempt))
 
         return response, is_late
+
+    async def _poll_queued_message(self, response: RDMResponse) -> RDMResponse:
+        """
+        Follow up an ACK_TIMER response per ANSI E1.20: wait the device-indicated
+        delay, then GET QUEUED_MESSAGE, repeating while it keeps returning
+        ACK_TIMER (up to `policy.max_ack_timer_polls` times).
+
+        Returns:
+            The final response (ACK/NAK from QUEUED_MESSAGE, or the last
+            ACK_TIMER seen if the poll budget or a poll timeout cuts it short).
+        """
+        assert self.queued_message_operation is not None
+
+        for _ in range(self.policy.max_ack_timer_polls):
+            if response.response_type != ResponseType.ACK_TIMER:
+                break
+
+            delay_ms = response.ack_timer_value or 0
+            logger.debug(
+                f"ACK_TIMER for {self._device_desc}: waiting {delay_ms}ms then "
+                f"polling QUEUED_MESSAGE"
+            )
+            await asyncio.sleep(delay_ms / 1000)
+
+            txn_number = self.allocator.allocate()
+            self.allocated_txn_numbers.append(txn_number)
+            self.correlator.register_transaction_numbers(self.allocated_txn_numbers)
+
+            try:
+                response = await asyncio.wait_for(
+                    self.queued_message_operation(txn_number), timeout=self.policy.timeout
+                )
+            except (TimeoutError, ProtocolTimeoutError):
+                logger.debug(f"QUEUED_MESSAGE poll timed out for {self._device_desc}")
+                break
+
+        return response
 
     def _update_state(self, attempt_index: int) -> None:
         """Update transaction state based on attempt number"""

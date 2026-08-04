@@ -126,12 +126,17 @@ class FrameBuffer:
 
         while len(self._buffer) >= 5 and iteration < max_iterations:
             iteration += 1
+            length_before = len(self._buffer)
             frame = self.extract_frame()
 
-            if frame is None:
+            if frame is not None:
+                frames.append(frame)
+            elif len(self._buffer) == length_before:
+                # No bytes were consumed - nothing left to do without more
+                # incoming data (as opposed to a discarded garbage byte or a
+                # consumed-but-unparseable frame, either of which still made
+                # progress and may have another frame right behind it).
                 break
-
-            frames.append(frame)
 
         return frames
 

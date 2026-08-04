@@ -6,10 +6,14 @@ NetworkManager must delegate DMX framing/sending to the transport instead of
 reaching into transport-specific internals (e.g. `.adapter`, `bypass_framing`).
 """
 
+from unittest import mock
+
 import pytest
 
 from rdm_dmx_async.application.network_manager import NetworkConfig, NetworkManager
+from rdm_dmx_async.packets.types import UID
 from rdm_dmx_async.scheduling.dmx_scheduler import DmxFrameScheduler
+from rdm_dmx_async.transport.interface_adapter import InterfaceType
 
 
 class FakeTransport:
@@ -81,3 +85,102 @@ class TestNetworkManagerSendDmx:
             assert transport.sent_frames == [(bytes(512), 1)]
         finally:
             await manager._scheduler.stop()
+
+
+class _FakeAdapter:
+    """Minimal stand-in for InterfaceAdapter, just enough for start()'s UID resolution."""
+
+    def __init__(self, interface_type: InterfaceType):
+        self.interface_type = interface_type
+
+
+@pytest.mark.asyncio
+class TestNetworkManagerControllerUidResolution:
+    """`start()`'s controller-UID resolution must be generic: an explicitly
+    configured `NetworkConfig.controller_uid` always wins, and only interface
+    types that can query their own UID (currently Enttec) get a hardware
+    fallback - anything else without a configured UID must fail clearly."""
+
+    async def test_bare_usb_rs485_without_controller_uid_raises(self):
+        manager = NetworkManager(
+            NetworkConfig(port="COM7", interface_type=InterfaceType.BARE_USB_RS485)
+        )
+        with (
+            mock.patch.object(manager._port_detector, "resolve_port", return_value="COM7"),
+            mock.patch.object(
+                manager, "_create_adapter", return_value=_FakeAdapter(InterfaceType.BARE_USB_RS485)
+            ),
+        ):
+            with pytest.raises(ValueError, match="controller_uid"):
+                await manager.start()
+
+    async def test_bare_usb_rs485_uses_configured_controller_uid(self):
+        controller_uid = UID(0xAABBCCDDEEFF)
+        manager = NetworkManager(
+            NetworkConfig(
+                port="COM7",
+                interface_type=InterfaceType.BARE_USB_RS485,
+                controller_uid=controller_uid,
+            )
+        )
+        transport_instance = mock.MagicMock(connect=mock.AsyncMock())
+        protocol_instance = mock.MagicMock(start=mock.AsyncMock())
+
+        with (
+            mock.patch.object(manager._port_detector, "resolve_port", return_value="COM7"),
+            mock.patch.object(
+                manager, "_create_adapter", return_value=_FakeAdapter(InterfaceType.BARE_USB_RS485)
+            ),
+            mock.patch(
+                "rdm_dmx_async.application.network_manager.AsyncSerialTransport",
+                return_value=transport_instance,
+            ),
+            mock.patch(
+                "rdm_dmx_async.application.network_manager.RDME120Protocol",
+                return_value=protocol_instance,
+            ) as mock_protocol_cls,
+            mock.patch("rdm_dmx_async.application.network_manager.DeviceRepository"),
+            mock.patch("rdm_dmx_async.application.network_manager.DiscoveryService"),
+        ):
+            await manager.start()
+
+        assert mock_protocol_cls.call_args.args[1] == controller_uid
+        assert manager.is_active is True
+
+    async def test_configured_controller_uid_skips_enttec_query(self):
+        controller_uid = UID(0xAABBCCDDEEFF)
+        manager = NetworkManager(
+            NetworkConfig(
+                port="COM7",
+                interface_type=InterfaceType.ENTTEC_USB_PRO,
+                controller_uid=controller_uid,
+            )
+        )
+        transport_instance = mock.MagicMock(connect=mock.AsyncMock())
+        protocol_instance = mock.MagicMock(start=mock.AsyncMock())
+
+        with (
+            mock.patch.object(manager._port_detector, "resolve_port", return_value="COM7"),
+            mock.patch.object(
+                manager,
+                "_create_adapter",
+                return_value=_FakeAdapter(InterfaceType.ENTTEC_USB_PRO),
+            ),
+            mock.patch(
+                "rdm_dmx_async.application.network_manager.get_enttec_serial_uid"
+            ) as mock_get_uid,
+            mock.patch(
+                "rdm_dmx_async.application.network_manager.AsyncSerialTransport",
+                return_value=transport_instance,
+            ),
+            mock.patch(
+                "rdm_dmx_async.application.network_manager.RDME120Protocol",
+                return_value=protocol_instance,
+            ) as mock_protocol_cls,
+            mock.patch("rdm_dmx_async.application.network_manager.DeviceRepository"),
+            mock.patch("rdm_dmx_async.application.network_manager.DiscoveryService"),
+        ):
+            await manager.start()
+
+        mock_get_uid.assert_not_called()
+        assert mock_protocol_cls.call_args.args[1] == controller_uid

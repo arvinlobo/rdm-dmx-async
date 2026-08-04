@@ -16,7 +16,7 @@ from ..protocols.rdm_e120 import RDME120Protocol
 from ..scheduling.dmx_scheduler import DmxFrameScheduler
 from ..services import DeviceRepository, DiscoveryService, RdmDevice
 from ..transaction.allocator import TransactionNumberAllocator
-from ..transport.adapters import DMXKingAdapter, EnttecAdapter
+from ..transport.adapters import BareUsbRs485Adapter, DMXKingAdapter, EnttecAdapter
 from ..transport.base import AsyncTransport
 from ..transport.interface_adapter import InterfaceAdapter, InterfaceType
 from ..transport.serial_transport import AsyncSerialTransport
@@ -47,8 +47,13 @@ class NetworkConfig:
     discovery_timeout: float = 5.0
     """Seconds to wait for RDM discovery (DISC_UNIQUE_BRANCH) to complete."""
 
-    interface_type: InterfaceType = InterfaceType.ENTTEC_USB_PRO_MK2
+    interface_type: InterfaceType = InterfaceType.ENTTEC_USB_PRO
     """Hardware interface adapter to use. See `InterfaceType` for supported widgets."""
+
+    controller_uid: UID | None = None
+    """UID this controller identifies itself as on the RDM network. Required for
+    interfaces with no onboard widget to query a UID from (e.g. BARE_USB_RS485);
+    ignored for interfaces that can report their own (e.g. Enttec)."""
 
 
 class NetworkManager:
@@ -85,9 +90,9 @@ class NetworkManager:
     # Registry of adapter factories keyed by interface type. New hardware
     # support can be added via register_adapter() without modifying this class.
     _ADAPTER_FACTORIES: dict[InterfaceType, Callable[[str], InterfaceAdapter]] = {
-        InterfaceType.ENTTEC_USB_PRO: lambda port: EnttecAdapter(port, use_mk2_protocol=False),
-        InterfaceType.ENTTEC_USB_PRO_MK2: lambda port: EnttecAdapter(port, use_mk2_protocol=True),
+        InterfaceType.ENTTEC_USB_PRO: lambda port: EnttecAdapter(port),
         InterfaceType.DMXKING_ULTRA_DMX: lambda port: DMXKingAdapter(port),
+        InterfaceType.BARE_USB_RS485: lambda port: BareUsbRs485Adapter(port),
     }
 
     @classmethod
@@ -183,12 +188,13 @@ class NetworkManager:
             adapter = self._create_adapter(self._config.interface_type)
             self._logger.info("Using adapter: %s", adapter.interface_type.value)
 
-            # Get controller UID (currently only for Enttec)
-            source_uid = None
-            if self._config.interface_type in [
-                InterfaceType.ENTTEC_USB_PRO,
-                InterfaceType.ENTTEC_USB_PRO_MK2,
-            ]:
+            # Get controller UID: an explicitly configured UID always wins;
+            # otherwise fall back to querying it from the adapter, for
+            # interfaces that can report their own (e.g. Enttec).
+            source_uid = self._config.controller_uid
+            if source_uid is not None:
+                self._logger.info("Controller UID: %012X", source_uid)
+            elif self._config.interface_type == InterfaceType.ENTTEC_USB_PRO:
                 # Port is guaranteed to be set by resolve_port
                 assert self._config.port is not None, "Port should be set by resolve_port"
                 source_uid = await get_enttec_serial_uid(
@@ -198,9 +204,9 @@ class NetworkManager:
                     raise RuntimeError(f"Could not get Enttec UID from {self._config.port}")
                 self._logger.info("Controller UID: %012X", source_uid)
             else:
-                # For non-Enttec interfaces, generate appropriate UID
-                raise NotImplementedError(
-                    f"Interface type {self._config.interface_type.value} not yet implemented"
+                raise ValueError(
+                    f"Interface type {self._config.interface_type.value} has no onboard "
+                    "UID to query - set NetworkConfig.controller_uid explicitly."
                 )
 
             # Create transport with adapter
@@ -304,17 +310,20 @@ class NetworkManager:
         async with self._wire_lock:
             await self._transport.send_dmx_frame(dmx_data, port=1)
 
-    async def send_dmx(self, dmx_data: bytes, port: int = 1) -> None:
+    async def send_dmx(self, dmx_data: bytes, port: int = 1, repeat: bool = False) -> None:
         """
         Send DMX512 data to output.
 
-        Also updates the background scheduler's frame buffer so output keeps
-        being refreshed automatically (per DMX512 spec) until the next call
-        to `send_dmx()`/`stop()`, instead of going stale after a single frame.
+        By default sends a single one-shot frame. Pass `repeat=True` to also
+        (lazily) start the background scheduler, which keeps re-transmitting
+        this buffer automatically (per DMX512 spec) until the next call to
+        `send_dmx()`/`stop()`, instead of going stale after a single frame.
 
         Args:
             dmx_data: DMX channel values (1-512 bytes, values 0-255)
             port: Physical port number (for multi-port interfaces)
+            repeat: If True, keep re-transmitting this frame in the background
+                until overwritten or stopped. Default False (single send).
 
         Raises:
             RuntimeError: If network manager not started
@@ -325,17 +334,20 @@ class NetworkManager:
         assert self._scheduler is not None, "Scheduler not initialized"
 
         self._scheduler.set_dmx_data(1, dmx_data)
-        # Lazily start the background refresh loop on first use, so sessions
-        # that never call send_dmx() (e.g. RDM-only discovery) don't pay for
-        # continuous DMX traffic on the shared serial line.
-        await self._scheduler.start()
+        if repeat:
+            # Lazily start the background refresh loop, so sessions that
+            # never opt in (e.g. RDM-only discovery, one-shot sends) don't
+            # pay for continuous DMX traffic on the shared serial line.
+            await self._scheduler.start()
+        elif self._scheduler.is_running:
+            # Caller explicitly asked for a single send - stop any previous
+            # repeat so this frame doesn't keep getting auto-refreshed.
+            await self._scheduler.stop()
 
         # Frame and send via the transport's DMX-output abstraction. Shares
         # the RDM wire lock since both write to the same physical serial port.
         async with self._wire_lock:
             await self._transport.send_dmx_frame(dmx_data, port=port)
-
-        self._logger.debug("Sent DMX data: %d channels", len(dmx_data))
 
     async def discover_devices(self, known_uids: list[UID] | None = None) -> list[RdmDevice]:
         """

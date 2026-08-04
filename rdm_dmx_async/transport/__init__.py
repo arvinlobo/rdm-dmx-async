@@ -7,6 +7,7 @@ Provides abstract interfaces and concrete implementations for:
 """
 
 from .adapters import (
+    BareUsbRs485Adapter,
     DMXKingAdapter,
     EnttecAdapter,
     EnttecMessageType,
@@ -31,4 +32,5 @@ __all__ = [
     "GenericSerialAdapter",
     "FramingMode",
     "EnttecMessageType",
+    "BareUsbRs485Adapter",
 ]

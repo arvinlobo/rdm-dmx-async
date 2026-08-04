@@ -1,24 +1,33 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import type { ModuleSchema } from '../api/types'
+import { useToast } from '../context/ToastContext'
 import { MethodForm } from './MethodForm'
 import { ReadOnlyField } from './ReadOnlyField'
+import { Skeleton } from './Skeleton'
 
 export interface ModulePanelProps {
   uid: string
   moduleName: string
   label: string
+  accentClass?: string
 }
 
 /** Dynamically renders one device API module's read-only state plus its callable actions. */
-export function ModulePanel({ uid, moduleName, label }: ModulePanelProps) {
+export function ModulePanel({ uid, moduleName, label, accentClass }: ModulePanelProps) {
   const [schema, setSchema] = useState<ModuleSchema | null>(null)
   const [state, setState] = useState<Record<string, unknown> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const { showToast } = useToast()
+  const hasLoadedOnceRef = useRef(false)
 
+  // Only the very first load shows the full-panel skeleton; refreshes triggered by a
+  // method's onSuccess must not unmount the already-rendered MethodForms, or the result
+  // it just displayed (e.g. a decoded get_parameter_description) disappears instantly.
   const load = useCallback(async () => {
-    setLoading(true)
+    const isFirstLoad = !hasLoadedOnceRef.current
+    if (isFirstLoad) setLoading(true)
     setError(null)
     try {
       const [schemaResult, stateResult] = await Promise.all([
@@ -27,20 +36,32 @@ export function ModulePanel({ uid, moduleName, label }: ModulePanelProps) {
       ])
       setSchema(schemaResult)
       setState(stateResult)
+      hasLoadedOnceRef.current = true
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to load module')
+      const message = err instanceof ApiError ? err.message : 'Failed to load module'
+      setError(message)
+      showToast(`${label}: ${message}`)
       setSchema(null)
       setState(null)
     } finally {
-      setLoading(false)
+      if (isFirstLoad) setLoading(false)
     }
-  }, [uid, moduleName])
+  }, [uid, moduleName, label, showToast])
 
   useEffect(() => {
+    hasLoadedOnceRef.current = false
     void load()
   }, [load])
 
-  if (loading) return <p className="module-panel-status">Loading {label}…</p>
+  if (loading) {
+    return (
+      <div className={`module-panel module-panel-loading${accentClass ? ` ${accentClass}` : ''}`}>
+        <p className="module-panel-summary module-panel-summary-static">{label}</p>
+        <span className="sr-only">Loading {label}…</span>
+        <Skeleton lines={3} />
+      </div>
+    )
+  }
   if (error) return <p className="module-panel-status module-panel-error">{error}</p>
   if (!schema) return null
 
@@ -49,7 +70,7 @@ export function ModulePanel({ uid, moduleName, label }: ModulePanelProps) {
   const stateEntries = state ? Object.entries(state) : []
 
   return (
-    <details className="module-panel" open>
+    <details className={`module-panel${accentClass ? ` ${accentClass}` : ''}`} open>
       <summary className="module-panel-summary">{label}</summary>
 
       {stateEntries.length > 0 && (

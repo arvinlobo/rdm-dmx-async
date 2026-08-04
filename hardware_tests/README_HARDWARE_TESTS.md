@@ -191,7 +191,6 @@ Test completed successfully!
 
 1. **Enttec USB DMX Interface**
    - Enttec USB Pro
-   - Enttec USB Pro Mk2
    - Or compatible RDM-capable DMX interface
 
 2. **RDM Device**

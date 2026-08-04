@@ -36,6 +36,14 @@ class TestValidation:
     def test_zero_delay_is_allowed(self):
         RetryPolicy(delay_between_attempts=0.0)  # should not raise
 
+    @pytest.mark.parametrize("max_ack_timer_polls", [0, -1])
+    def test_max_ack_timer_polls_below_one_raises(self, max_ack_timer_polls):
+        with pytest.raises(ValueError):
+            RetryPolicy(max_ack_timer_polls=max_ack_timer_polls)
+
+    def test_max_ack_timer_polls_defaults_to_three(self):
+        assert RetryPolicy().max_ack_timer_polls == 3
+
 
 class TestIsPermanentFailure:
     def test_unknown_pid_is_permanent_by_default(self):

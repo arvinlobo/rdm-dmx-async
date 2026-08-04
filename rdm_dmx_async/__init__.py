@@ -4,7 +4,6 @@ rdm_dmx_async - Modern async-first library for RDM and DMX protocols
 This library provides a clean, type-safe, and performant implementation of:
 - RDM (Remote Device Management) E1.20 protocol
 - DMX512-A protocol
-- Art-Net RDM transport
 
 Key features:
 - Native async/await throughout (no thread pools)

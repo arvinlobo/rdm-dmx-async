@@ -52,7 +52,7 @@ class TestEnttecAdapterFraming:
 
     def test_adapter_initialization(self):
         """Test creating an Enttec adapter."""
-        adapter = EnttecAdapter("COM1", use_mk2_protocol=False)
+        adapter = EnttecAdapter("COM1")
 
         assert adapter.interface_type == InterfaceType.ENTTEC_USB_PRO
         assert adapter.serial_config.port == "COM1"
@@ -176,7 +176,7 @@ class TestEnttecAdapterParsing:
 
     def test_parse_rdm_response_valid(self):
         """Test parsing valid RDM response."""
-        adapter = EnttecAdapter("COM1", use_mk2_protocol=False)
+        adapter = EnttecAdapter("COM1")
 
         # Build RDM response frame
         rdm_response = bytes(
@@ -289,31 +289,6 @@ class TestEnttecPacketSizes:
         # Parse and verify data is preserved
         label, data = parse_enttec_frame(framed)
         # Data includes start code (0x00) + dmx_data
-        assert data == bytes([0x00]) + dmx_data
-
-
-class TestEnttecMk2Differences:
-    """Test USB Pro Mk2 specific behavior."""
-
-    def test_mk2_adapter_initialization(self):
-        """Test creating Mk2 adapter."""
-        adapter = EnttecAdapter("COM1", use_mk2_protocol=True)
-
-        assert adapter.interface_type == InterfaceType.ENTTEC_USB_PRO_MK2
-
-    def test_mk2_uses_same_dmx_framing(self):
-        """Test that Mk2 uses same DMX framing as original USB Pro."""
-        adapter = EnttecAdapter("COM1", use_mk2_protocol=True)
-
-        dmx_data = bytes([0xFF, 0x00, 0x00])
-
-        # Frame for port 1
-        framed = adapter.frame_dmx_output(dmx_data, port=1)
-
-        label, data = parse_enttec_frame(framed)
-
-        # Mk2 uses same format: start code + DMX data (no port byte for type 6)
-        assert label == EnttecMessageType.OUTPUT_ONLY_SEND_DMX
         assert data == bytes([0x00]) + dmx_data
 
 
@@ -443,7 +418,7 @@ class TestEdgeCasesAndErrors:
 
     def test_parse_frame_with_error_status(self):
         """Test parsing RDM response with error status."""
-        adapter = EnttecAdapter("COM1", use_mk2_protocol=False)
+        adapter = EnttecAdapter("COM1")
 
         rdm_data = bytes([0xCC] + [0x00] * 23)
         status = 0x01  # Error status
@@ -649,8 +624,8 @@ class TestEndToEndWorkflows:
         assert len(frames) == 10
 
     def test_multi_universe_dmx_output(self):
-        """Test DMX output for multiple universes (Mk2 scenario)."""
-        adapter = EnttecAdapter("COM1", use_mk2_protocol=True)
+        """Test DMX output for multiple universes."""
+        adapter = EnttecAdapter("COM1")
 
         # Port 1: Red universe
         port1_dmx = bytes([0xFF, 0x00, 0x00] * 8)  # 24 channels
@@ -729,7 +704,7 @@ class TestEndToEndWorkflows:
 
     def test_encode_decode_roundtrip(self):
         """Test full encode-frame-parse roundtrip."""
-        adapter = EnttecAdapter("COM1", use_mk2_protocol=False)
+        adapter = EnttecAdapter("COM1")
         encoder = PacketEncoder()
 
         # Create RDM request

@@ -3,8 +3,8 @@
 Per the Dependency Inversion Principle, higher layers (services, transaction
 manager) should depend on this abstraction rather than the concrete
 `RDME120Protocol` implementation. This also makes it possible to introduce
-alternative protocol implementations (e.g. Art-Net RDM) without changing any
-service-layer code.
+alternative protocol implementations without changing any service-layer
+code.
 """
 
 from typing import TYPE_CHECKING, Protocol, runtime_checkable

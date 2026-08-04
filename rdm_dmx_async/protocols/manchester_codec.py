@@ -9,6 +9,43 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Per ANSI E1.20, a responder may send 0-7 bytes of 0xFE preamble before the
+# 0xAA start byte - purpose-built widgets (Enttec) normalize this to a fixed
+# 7-byte preamble, but a raw wire capture (e.g. a bare manual-break interface)
+# may see fewer.
+_MAX_PREAMBLE_BYTES = 7
+_MANCHESTER_DATA_LEN = 16  # 6 UID bytes + 2 checksum bytes, each Manchester-doubled
+
+
+def find_discovery_frame_length(buffer: bytes) -> int:
+    """
+    Determine the total length of a DISC_UNIQUE_BRANCH response at the front
+    of `buffer` (0-7 bytes of 0xFE preamble + 0xAA + 16 Manchester bytes).
+
+    Returns:
+        Total frame length, or 0 if `buffer` doesn't start with a discovery
+        response or the frame hasn't fully arrived yet.
+    """
+    preamble_len = 0
+    while (
+        preamble_len < len(buffer)
+        and preamble_len < _MAX_PREAMBLE_BYTES
+        and buffer[preamble_len] == 0xFE
+    ):
+        preamble_len += 1
+
+    if preamble_len == 0:
+        return 0
+
+    aa_index = preamble_len
+    if aa_index >= len(buffer):
+        return 0  # preamble seen, but 0xAA hasn't arrived yet
+    if buffer[aa_index] != 0xAA:
+        return 0
+
+    total = aa_index + 1 + _MANCHESTER_DATA_LEN
+    return total if len(buffer) >= total else 0
+
 
 class ManchesterDiscoveryDecoder:
     """Decodes Manchester-encoded DISC_UNIQUE_BRANCH discovery responses."""
@@ -17,12 +54,12 @@ class ManchesterDiscoveryDecoder:
         """
         Decode Manchester-encoded discovery response to extract UID.
 
-        Format: 7*0xFE (preamble) + Manchester(UID + UID + Checksum)
+        Format: 0-7 bytes of 0xFE (preamble) + 0xAA + Manchester(UID + Checksum)
         Manchester encoding: each data byte is encoded as two bytes where
         bitwise AND of the pair recovers the original byte.
 
         Args:
-            data: Raw Manchester-encoded bytes from device (24 bytes total)
+            data: Raw Manchester-encoded bytes from device (one complete frame)
 
         Returns:
             6-byte UID if valid, None if collision or invalid
@@ -31,22 +68,19 @@ class ManchesterDiscoveryDecoder:
             "[MANCHESTER] Decoding %d bytes: %s", len(data), " ".join(f"{b:02X}" for b in data)
         )
 
-        # Verify preamble: 7x 0xFE followed by 0xAA
-        if len(data) != 24:
-            logger.info("[MANCHESTER] Invalid length: %d bytes (expected 24)", len(data))
+        frame_len = find_discovery_frame_length(data)
+        if frame_len == 0 or frame_len != len(data):
+            logger.info(
+                "[MANCHESTER] Invalid/incomplete frame: %d bytes (parsed length %d)",
+                len(data),
+                frame_len,
+            )
             return None
 
-        if data[0:7] != b"\xfe" * 7:
-            logger.info("[MANCHESTER] Invalid preamble")
-            return None
+        preamble_len = frame_len - 1 - _MANCHESTER_DATA_LEN
 
-        if data[7] != 0xAA:
-            logger.info("[MANCHESTER] Invalid start byte: 0x%02X (expected 0xAA)", data[7])
-            return None
-
-        # Manchester data starts at byte 8, continues for 16 bytes
-        # Decode by AND'ing each pair of bytes
-        manchester_data = data[8:]
+        # Manchester data starts right after the 0xAA start byte
+        manchester_data = data[preamble_len + 1 :]
         logger.info(
             "[MANCHESTER] Manchester data: %s", " ".join(f"{b:02X}" for b in manchester_data)
         )

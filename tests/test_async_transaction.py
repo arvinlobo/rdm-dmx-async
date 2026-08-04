@@ -374,3 +374,157 @@ class TestResultAndAttemptProperties:
 
         assert result.attempts[0].success is False
         assert result.attempts[0].is_nak is True  # is_nak checks response_type, not success
+
+
+def _ack_timer_response(txn: int, delay_units: int = 0) -> RDMResponse:
+    """ACK_TIMER response whose data encodes the estimated delay in 100ms units."""
+    return _response(
+        txn, response_type=ResponseType.ACK_TIMER, data=delay_units.to_bytes(2, byteorder="big")
+    )
+
+
+@pytest.mark.asyncio
+class TestAckTimerHandling:
+    """ACK_TIMER responses must trigger a GET QUEUED_MESSAGE follow-up per
+    ANSI E1.20, not be treated as a plain retry-worthy failure."""
+
+    async def test_ack_timer_then_ack_from_queued_message_succeeds(self):
+        allocator = TransactionNumberAllocator()
+        operation = ScriptedOperation([lambda txn: _ack_timer_response(txn, delay_units=1)])
+        queued_message = ScriptedOperation([_response])
+        transaction = AsyncTransaction(
+            operation=operation,
+            policy=RetryPolicy(max_attempts=3, timeout=1.0),
+            allocator=allocator,
+            queued_message_operation=queued_message,
+        )
+
+        loop = asyncio.get_event_loop()
+        start = loop.time()
+        result = await transaction.execute()
+        elapsed = loop.time() - start
+
+        assert result.success is True
+        assert result.attempt_count == 1  # the ACK_TIMER/poll cycle counts as one attempt
+        assert len(operation.calls) == 1
+        assert len(queued_message.calls) == 1
+        assert elapsed >= 0.1  # waited the 1*100ms delay indicated by the ACK_TIMER
+        assert allocator.in_use_count == 0
+
+    async def test_ack_timer_then_nak_from_queued_message_is_recorded_as_nak(self):
+        allocator = TransactionNumberAllocator()
+        operation = ScriptedOperation([_ack_timer_response])
+        queued_message = ScriptedOperation(
+            [
+                lambda txn: _response(
+                    txn, response_type=ResponseType.NAK, data=bytes([NAKReason.DATA_OUT_OF_RANGE])
+                )
+            ]
+        )
+        transaction = AsyncTransaction(
+            operation=operation,
+            policy=RetryPolicy(max_attempts=1, timeout=1.0, permanent_failures=set()),
+            allocator=allocator,
+            queued_message_operation=queued_message,
+        )
+
+        result = await transaction.execute()
+
+        assert result.success is False
+        assert result.attempts[0].is_nak is True
+        assert result.attempts[0].nak_reason == NAKReason.DATA_OUT_OF_RANGE
+        assert len(queued_message.calls) == 1
+
+    async def test_ack_timer_can_repeat_before_resolving(self):
+        allocator = TransactionNumberAllocator()
+        operation = ScriptedOperation([_ack_timer_response])
+        queued_message = ScriptedOperation(
+            [
+                _ack_timer_response,  # still not ready
+                _response,  # now ready
+            ]
+        )
+        transaction = AsyncTransaction(
+            operation=operation,
+            policy=RetryPolicy(max_attempts=1, timeout=1.0, max_ack_timer_polls=3),
+            allocator=allocator,
+            queued_message_operation=queued_message,
+        )
+
+        result = await transaction.execute()
+
+        assert result.success is True
+        assert len(queued_message.calls) == 2
+        assert allocator.in_use_count == 0
+
+    async def test_ack_timer_poll_budget_exhausted_falls_through_to_outer_retry(self):
+        allocator = TransactionNumberAllocator()
+        operation = ScriptedOperation(
+            [
+                _ack_timer_response,  # attempt 1: never resolves
+                _response,  # attempt 2: succeeds normally
+            ]
+        )
+        # queued_message always says "still not ready" - poll budget will exhaust
+        queued_message = ScriptedOperation([_ack_timer_response, _ack_timer_response])
+        transaction = AsyncTransaction(
+            operation=operation,
+            policy=RetryPolicy(max_attempts=2, timeout=1.0, max_ack_timer_polls=2),
+            allocator=allocator,
+            queued_message_operation=queued_message,
+        )
+
+        result = await transaction.execute()
+
+        assert result.success is True
+        assert result.attempt_count == 2
+        assert len(queued_message.calls) == 2  # exactly the poll budget, no more
+        assert allocator.in_use_count == 0
+
+    async def test_ack_timer_without_queued_message_operation_falls_back_to_generic_retry(self):
+        """When no queued_message_operation is supplied (e.g. discovery-style
+        transactions), an ACK_TIMER must not crash and must fall back to a
+        plain retry of the original operation instead of hanging."""
+        allocator = TransactionNumberAllocator()
+        operation = ScriptedOperation(
+            [
+                _ack_timer_response,
+                _response,
+            ]
+        )
+        transaction = AsyncTransaction(
+            operation=operation,
+            policy=RetryPolicy(max_attempts=2, timeout=1.0),
+            allocator=allocator,
+        )
+
+        result = await transaction.execute()
+
+        assert result.success is True
+        assert len(operation.calls) == 2
+        assert allocator.in_use_count == 0
+
+    async def test_manager_get_wires_queued_message_operation_to_send_get_command(self):
+        protocol = TestAsyncTransactionManager._FakeProtocol()
+        protocol.next_response_type = ResponseType.ACK_TIMER
+        protocol.next_data = (1).to_bytes(2, byteorder="big")
+        manager = AsyncTransactionManager(protocol)
+
+        # After the first ACK_TIMER, flip subsequent responses (the
+        # QUEUED_MESSAGE poll) to ACK so the transaction can succeed.
+        original_send_get_command = protocol.send_get_command
+        call_count = 0
+
+        async def send_get_command(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count > 1:
+                protocol.next_response_type = ResponseType.ACK
+            return await original_send_get_command(**kwargs)
+
+        protocol.send_get_command = send_get_command
+
+        result = await manager.get(DEVICE_UID, PID(0x1000))
+
+        assert result.success is True
+        assert protocol.get_calls[-1]["pid"] == PID(0x0020)  # QUEUED_MESSAGE follow-up

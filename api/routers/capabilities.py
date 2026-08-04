@@ -13,6 +13,7 @@ without the backend needing a route defined per method.
 """
 
 import inspect
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -33,7 +34,11 @@ from ..schemas import (
     PersonalityOption,
     SensorReading,
     SensorReadingsResponse,
+    SupportedPidListResponse,
+    SupportedPidOption,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/devices/{uid}", tags=["capabilities"])
 
@@ -132,7 +137,12 @@ _METHOD_PID: dict[str, dict[str, int]] = {
     },
     "system": {
         "get_supported_parameters": StandardPID.SUPPORTED_PARAMETERS,
-        "get_parameter_description": StandardPID.PARAMETER_DESCRIPTION,
+        # get_parameter_description deliberately has no PID mapping here (so it's never
+        # flagged "Not supported by this device"): unlike other getters, it's meant to be
+        # tried per-target-PID, not device-wide - it's most useful for a manufacturer-
+        # specific PID the device doesn't otherwise expose a named getter for, and simply
+        # NAKing for a standard PID (which already has a spec-fixed type/range) is expected
+        # per E1.20, not evidence the whole command is unsupported.
         "get_queued_message": StandardPID.QUEUED_MESSAGE,
         "get_status_messages": StandardPID.STATUS_MESSAGES,
         "get_status_id_description": StandardPID.STATUS_ID_DESCRIPTION,
@@ -188,6 +198,13 @@ _ENUM_PARAMS: set[tuple[str, str, str]] = {
     ("dmx_config", "get_personality_description", "personality"),
 }
 
+# (module, method, param) whose value should be picked from the device's own
+# GET_SUPPORTED_PARAMETERS list (e.g. PARAMETER_DESCRIPTION only makes sense for a PID
+# the device actually reports supporting) rather than a bare 0-65535 numeric field.
+_PID_PARAMS: set[tuple[str, str, str]] = {
+    ("system", "get_parameter_description", "pid"),
+}
+
 
 def _resolve_module(device: RdmDevice, module_name: str) -> object:
     if module_name not in API_PID_MAPPING:
@@ -238,9 +255,12 @@ def get_module_schema(module_name: str, device: RdmDevice = Depends(get_device))
         for p in sig.parameters.values():
             if p.name == "self":
                 continue
-            kind = (
-                "enum" if (module_name, name, p.name) in _ENUM_PARAMS else _infer_kind(p.annotation)
-            )
+            if (module_name, name, p.name) in _ENUM_PARAMS:
+                kind = "enum"
+            elif (module_name, name, p.name) in _PID_PARAMS:
+                kind = "pid"
+            else:
+                kind = _infer_kind(p.annotation)
             param_min, param_max = _PARAM_RANGE_HINTS.get((module_name, name, p.name), (None, None))
             if kind == "int" and param_min is None:
                 param_min, param_max = 0, 255
@@ -271,6 +291,7 @@ async def get_module_state(
 ) -> dict[str, Any]:
     """Call every zero-required-argument getter on a module and return the results."""
     module = _resolve_module(device, module_name)
+    method_pids = _METHOD_PID.get(module_name, {})
     result: dict[str, Any] = {}
     for name, method in _public_async_methods(module):
         if not (name.startswith("get") or name == "get"):
@@ -282,6 +303,14 @@ async def get_module_state(
             if p.name not in ("self", "use_cache") and p.default is inspect.Parameter.empty
         ]
         if required:
+            continue
+        # Skip PIDs already confirmed unsupported (from GET_SUPPORTED_PARAMETERS) instead
+        # of issuing a GET that's known to come back NAK UNKNOWN_PID - this is the main
+        # source of "Permanent failure ... NAK UNKNOWN_PID" warnings, since every state
+        # refresh otherwise re-probes every optional getter on the module.
+        pid = method_pids.get(name)
+        if pid is not None and not device.supports_pid(pid):
+            result[name] = None
             continue
         try:
             value = await method()
@@ -309,7 +338,14 @@ async def call_module_method(
     except TypeError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    return MethodCallResponse(result=_serialize(result))
+    serialized = _serialize(result)
+    # One line per user-initiated call (button click), regardless of module - the
+    # per-packet RDM chatter underneath this is DEBUG-only, so this is the only
+    # visible record that a set/action was performed unless something goes wrong.
+    logger.info(
+        "%012X %s.%s(%s) -> %r", device.uid, module_name, method_name, body.args, serialized
+    )
+    return MethodCallResponse(result=serialized)
 
 
 @router.get("/modules/dmx_config/personalities", response_model=PersonalityListResponse)
@@ -332,12 +368,32 @@ async def get_personalities(device: RdmDevice = Depends(get_device)) -> Personal
     return PersonalityListResponse(current=current_personality, options=options)
 
 
+@router.get("/modules/system/supported-pids", response_model=SupportedPidListResponse)
+async def get_supported_pids(device: RdmDevice = Depends(get_device)) -> SupportedPidListResponse:
+    """List every PID this device reports supporting, for a "choose by name" selector.
+
+    Used by ``system.get_parameter_description``, which otherwise NAKs (UNKNOWN_PID)
+    for any PID the device wasn't actually asked about via GET_SUPPORTED_PARAMETERS.
+    """
+    pids = await device.system.get_supported_parameters()
+    options = []
+    for pid in pids or []:
+        try:
+            name = StandardPID(pid).name
+        except ValueError:
+            name = f"0x{pid:04X}"
+        options.append(SupportedPidOption(pid=pid, name=name))
+    return SupportedPidListResponse(options=options)
+
+
 @router.get("/modules/sensors/readings", response_model=SensorReadingsResponse)
 async def get_sensor_readings(device: RdmDevice = Depends(get_device)) -> SensorReadingsResponse:
     """Merge each sensor's static definition with its live value, for display.
 
     A bare ``sensors.get_value(n)`` result is meaningless without the matching
-    definition's description/unit/scaling, so this composes both PIDs.
+    definition's description/unit/scaling, so this composes both PIDs. Loading
+    definitions first (below) warms `SensorDefinitionsAPI`'s cache, so
+    `sensors.get_value()` can scale its readings by the sensor's own prefix.
     """
     definitions = await device.sensor_definitions.get_all_sensor_definitions()
     readings = []

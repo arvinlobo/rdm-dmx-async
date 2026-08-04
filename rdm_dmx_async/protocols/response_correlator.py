@@ -73,7 +73,7 @@ class ResponseCorrelator:
         self._handlers[txn_num] = future
         self._handler_timestamps[txn_num] = datetime.now()
 
-        self._logger.info(
+        self._logger.debug(
             f"[TXN_REG] Registered handler for TXN {txn_num} (active handlers: {len(self._handlers)})"
         )
         return future
@@ -82,7 +82,7 @@ class ResponseCorrelator:
         """Returns True if response was correlated with a handler."""
         txn_num = int(response.transaction_number)
 
-        self._logger.info(
+        self._logger.debug(
             f"[TXN_CORRELATE] Looking for handler for TXN {txn_num}, active: {list(self._handlers.keys())}"
         )
 
@@ -105,7 +105,7 @@ class ResponseCorrelator:
         self._handlers.pop(txn_num, None)
         self._handler_timestamps.pop(txn_num, None)
 
-        self._logger.info(f"[TXN_CORRELATE] Correlated response for TXN {txn_num}")
+        self._logger.debug(f"[TXN_CORRELATE] Correlated response for TXN {txn_num}")
         return True
 
     def unregister_handler(self, transaction_number: TransactionNumber) -> None:

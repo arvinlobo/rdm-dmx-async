@@ -31,7 +31,10 @@ class _FakeAdapter:
         if frame_len == 0:
             return None
         payload_len = raw_data[1]
-        return bytes(raw_data[2 : 2 + payload_len])
+        payload = raw_data[2 : 2 + payload_len]
+        if payload == b"UNHANDLED":
+            return None  # simulates a recognized-but-unparseable message type
+        return bytes(payload)
 
 
 def _frame(payload: bytes) -> bytes:
@@ -189,6 +192,66 @@ class TestGarbageByteDiscarding:
             buffer.extract_frame()
 
         assert len(buffer) <= 20
+
+
+class TestUnhandledFrameStillConsumed:
+    """A recognized frame whose parse comes back None (e.g. an unhandled
+    message type) must still be removed from the buffer, not left stuck at
+    the front blocking subsequent frames."""
+
+    def test_unparseable_frame_is_consumed_and_returns_none(self):
+        buffer = FrameBuffer(_FakeAdapter())
+        buffer.append(_frame(b"UNHANDLED"))
+
+        assert buffer.extract_frame() is None
+        assert len(buffer) == 0  # consumed, not stuck waiting for more data
+
+    def test_next_frame_still_extracted_after_unhandled_one(self):
+        buffer = FrameBuffer(_FakeAdapter())
+        buffer.append(_frame(b"UNHANDLED") + _frame(b"ok"))
+
+        frames = buffer.extract_all_frames()
+
+        assert frames == [b"ok"]  # the unhandled frame is silently dropped
+
+
+class TestHandleOverflow:
+    """Direct coverage of `_handle_overflow()`, which the stall-tracking
+    path only exercises indirectly."""
+
+    def test_no_discard_when_buffer_within_max_size(self):
+        buffer = FrameBuffer(_FakeAdapter(), max_size=10)
+        buffer.append(bytes(range(10)))
+
+        buffer._handle_overflow()
+
+        assert len(buffer) == 10  # exactly at the cap - not over it, no discard
+
+    def test_discards_oldest_byte_when_over_max_size(self):
+        buffer = FrameBuffer(_FakeAdapter(), max_size=10)
+        buffer.append(bytes(range(11)))  # 1 byte over the cap
+
+        buffer._handle_overflow()
+
+        assert len(buffer) == 10
+        assert bytes(buffer._buffer) == bytes(range(1, 11))  # byte 0 dropped, not the newest
+
+    def test_only_pops_one_byte_per_call_even_when_far_over_cap(self):
+        buffer = FrameBuffer(_FakeAdapter(), max_size=10)
+        buffer.append(bytes(range(15)))  # 5 bytes over the cap
+
+        buffer._handle_overflow()
+
+        assert len(buffer) == 14  # only one byte discarded per call
+
+    def test_repeated_calls_drain_down_to_max_size(self):
+        buffer = FrameBuffer(_FakeAdapter(), max_size=10)
+        buffer.append(bytes(range(15)))
+
+        for _ in range(5):
+            buffer._handle_overflow()
+
+        assert len(buffer) == 10
 
 
 class TestClearAndLen:

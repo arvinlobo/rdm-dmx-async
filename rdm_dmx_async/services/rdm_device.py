@@ -118,13 +118,16 @@ API_PID_MAPPING: dict[str, list[StandardPID]] = {
 # omit these mandatory PIDs since every RDM device is required to implement
 # them - so their absence from the discovered PID list does NOT mean "not
 # supported". Always treat them as supported.
+# NOTE: PARAMETER_DESCRIPTION is deliberately NOT here - per E1.20 it's only
+# required for responders that expose manufacturer-specific PIDs, so a device
+# omitting it from GET_SUPPORTED_PARAMETERS genuinely may not implement it
+# (confirmed live: a real device NAK'd UNKNOWN_PID for GET PID=0x51).
 _MANDATORY_PIDS: frozenset[int] = frozenset(
     {
         StandardPID.DISC_UNIQUE_BRANCH,
         StandardPID.DISC_MUTE,
         StandardPID.DISC_UN_MUTE,
         StandardPID.SUPPORTED_PARAMETERS,
-        StandardPID.PARAMETER_DESCRIPTION,
         StandardPID.DEVICE_INFO,
         StandardPID.SOFTWARE_VERSION_LABEL,
         StandardPID.DMX_START_ADDRESS,
