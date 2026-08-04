@@ -1,0 +1,41 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Distribution / packaging
+build/
+dist/
+
+# Node (defensive: frontend/ has its own .gitignore for its normal location)
+node_modules/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Generated API documentation
+docs/api/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Local logs / scratch output
+*.log
+test_output.txt

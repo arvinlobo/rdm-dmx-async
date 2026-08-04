@@ -1,0 +1,32 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+    -   id: end-of-file-fixer
+        exclude: '\.bin$'
+    -   id: check-merge-conflict
+    -   id: check-added-large-files
+    -   id: check-case-conflict
+    -   id: check-yaml
+    -   id: check-toml
+    -   id: detect-private-key
+    -   id: mixed-line-ending
+        exclude: '\.bin$'
+    -   id: trailing-whitespace
+        exclude: '\.bin$'
+-   repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.16.0
+    hooks:
+      # Run the linter.
+    -   id: ruff-check
+        types_or: [ python, pyi ]
+        args: [ --fix ]
+      # Run the formatter.
+    -   id: ruff-format
+        types_or: [ python, pyi ]
+-   repo: https://github.com/astral-sh/uv-pre-commit
+    # uv version.
+    rev: 0.11.17
+    hooks:
+    -   id: uv-lock

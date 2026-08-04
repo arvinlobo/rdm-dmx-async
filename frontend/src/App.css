@@ -1,0 +1,462 @@
+.app {
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1.25rem 1.5rem 3rem;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header h1 {
+  font-size: 1.35rem;
+  margin: 0;
+}
+
+.app-error {
+  color: var(--danger);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+}
+
+/* Toolbar: connection + device selection, side by side, compact */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.network-panel,
+.device-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6rem 0.85rem;
+  flex: 1 1 320px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  flex: 0 0 auto;
+}
+
+.status-pill-connected .status-dot {
+  background: var(--success);
+}
+
+/* Main content: DMX output card + a responsive grid of module cards */
+.app-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.capability-dashboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+
+.module-panel {
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  border-radius: 10px;
+  padding: 0 0.9rem 0.9rem;
+}
+
+.module-panel-summary {
+  list-style: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-h);
+  padding: 0.75rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.module-panel-summary::-webkit-details-marker {
+  display: none;
+}
+
+.module-panel-summary::before {
+  content: '▸';
+  color: var(--accent);
+  transition: transform 0.15s ease;
+  font-size: 0.75rem;
+}
+
+.module-panel[open] > .module-panel-summary::before {
+  transform: rotate(90deg);
+}
+
+.module-panel-status {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.module-panel-state,
+.module-panel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.module-panel-actions {
+  margin-top: 0.6rem;
+}
+
+.method-form {
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.method-form:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.method-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.method-form-header h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.method-form-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.5rem 0.75rem;
+}
+
+.method-form-result {
+  color: var(--success);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.method-form-unsupported {
+  color: #d97706;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.method-form-error,
+.module-panel-error,
+.dashboard-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.sensors-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.sensors-table th,
+.sensors-table td {
+  text-align: left;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.sensors-table th {
+  font-weight: 600;
+  opacity: 0.75;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dmx-slot-panel {
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  border-radius: 10px;
+  padding: 0.9rem 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dmx-slot-panel h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.dmx-slot-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.6rem 1rem;
+}
+
+.dmx-slot-panel-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.dmx-slot-panel-hint {
+  color: var(--text);
+  opacity: 0.65;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.color-wheel-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.color-wheel-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  min-width: 5rem;
+}
+
+.color-wheel {
+  position: relative;
+  touch-action: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.color-wheel-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.color-wheel-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, #000, #fff);
+}
+
+.color-wheel-disc {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, #fff 0%, rgba(255, 255, 255, 0) 100%),
+    conic-gradient(from 90deg, red, yellow, lime, cyan, blue, magenta, red);
+}
+
+/* Dims the disc to match the actual output color as intensity (the ring) drops. */
+.color-wheel-value-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #000;
+  pointer-events: none;
+}
+
+.color-wheel-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.color-wheel-handle-disc {
+  background: transparent;
+}
+
+.color-wheel-handle-ring {
+  background: #333;
+}
+
+/* Segmented (toggle) control - replaces a two-option <select> */
+.segmented {
+  display: inline-flex;
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.segmented-option {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.segmented-option-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.field-select select {
+  padding: 0.35rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: left;
+}
+
+.field > .field-label {
+  flex: 0 0 auto;
+  min-width: 6.5rem;
+}
+
+.field-select,
+.field-text,
+.field-slider {
+  width: 100%;
+}
+
+.field-select select,
+.field-text input {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-checkbox {
+  flex-direction: row;
+  align-items: center;
+}
+
+.field-checkbox > .field-label {
+  min-width: 0;
+}
+
+.field-label {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.field-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.field-slider-row input[type='range'] {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-slider-number {
+  width: 4rem;
+  flex: 0 0 auto;
+}
+
+.field-readonly {
+  flex-direction: row;
+  justify-content: space-between;
+}
+
+.btn {
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-secondary {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-h);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .field {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .field > .field-label {
+    min-width: 0;
+  }
+}
