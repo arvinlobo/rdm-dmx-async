@@ -99,6 +99,69 @@ class StandardPID(IntEnum):
         return PID(value)
 
 
+class ParameterDataType(IntEnum):
+    """ANSI E1.20 Table A-9: PARAMETER_DESCRIPTION's DATA_TYPE field."""
+
+    NOT_DEFINED = 0x00
+    BIT_FIELD = 0x01
+    ASCII = 0x02
+    UNSIGNED_BYTE = 0x03
+    SIGNED_BYTE = 0x04
+    UNSIGNED_WORD = 0x05
+    SIGNED_WORD = 0x06
+    UNSIGNED_DWORD = 0x07
+    SIGNED_DWORD = 0x08
+
+
+class ParameterCommandClass(IntEnum):
+    """ANSI E1.20 Table A-8: PARAMETER_DESCRIPTION's COMMAND_CLASS field."""
+
+    GET = 0x00
+    SET = 0x01
+    GET_SET = 0x02
+
+
+# Friendly (name, byte width) per DATA_TYPE - byte width is None for ASCII (variable
+# length, up to PDL_SIZE) and for codes this library doesn't have a fixed width for
+# (BIT_FIELD is 1-N bytes per spec, manufacturer-specific/reserved codes are unknown).
+_PARAMETER_DATA_TYPE_INFO: dict[int, tuple[str, int | None]] = {
+    ParameterDataType.NOT_DEFINED: ("Not defined", None),
+    ParameterDataType.BIT_FIELD: ("Bit field", None),
+    ParameterDataType.ASCII: ("ASCII string", None),
+    ParameterDataType.UNSIGNED_BYTE: ("Unsigned byte (0-255)", 1),
+    ParameterDataType.SIGNED_BYTE: ("Signed byte (-128 to 127)", 1),
+    ParameterDataType.UNSIGNED_WORD: ("Unsigned word (0-65535)", 2),
+    ParameterDataType.SIGNED_WORD: ("Signed word (-32768 to 32767)", 2),
+    ParameterDataType.UNSIGNED_DWORD: ("Unsigned dword (0-4294967295)", 4),
+    ParameterDataType.SIGNED_DWORD: ("Signed dword", 4),
+}
+
+_COMMAND_CLASS_NAMES: dict[int, str] = {
+    ParameterCommandClass.GET: "GET only",
+    ParameterCommandClass.SET: "SET only",
+    ParameterCommandClass.GET_SET: "GET and SET",
+}
+
+
+def parameter_data_type_info(data_type: int) -> tuple[str, int | None]:
+    """Friendly (label, fixed byte width) for a PARAMETER_DESCRIPTION DATA_TYPE code.
+
+    Falls back to a generic manufacturer-specific/reserved label for codes outside
+    the fixed E1.20 range (0x80-0xDF manufacturer-specific, 0x09-0x7F/0xE0-0xFF
+    reserved) since this library can't know their real shape.
+    """
+    if data_type in _PARAMETER_DATA_TYPE_INFO:
+        return _PARAMETER_DATA_TYPE_INFO[data_type]
+    if 0x80 <= data_type <= 0xDF:
+        return (f"Manufacturer-specific (0x{data_type:02X})", None)
+    return (f"Reserved (0x{data_type:02X})", None)
+
+
+def command_class_name(command_class: int) -> str:
+    """Friendly label for a PARAMETER_DESCRIPTION COMMAND_CLASS code."""
+    return _COMMAND_CLASS_NAMES.get(command_class, f"Unknown (0x{command_class:02X})")
+
+
 # ANSI E1.20 Table A-14: SENSOR_DEFINITION's PREFIX field -> power-of-ten exponent.
 # The wire value is not the exponent itself (it jumps from YOCTO=0x0A to DECA=0x11,
 # skipping 0x0B-0x10), so this map is the authoritative conversion - not `10**prefix`.

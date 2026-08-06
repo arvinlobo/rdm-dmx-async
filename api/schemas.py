@@ -110,11 +110,14 @@ class ModuleParamSpec(BaseModel):
     """A single parameter of a module method, for dynamic form generation."""
 
     name: str
-    kind: str = Field(description="'int' | 'str' | 'bool' | 'enum' | 'unknown'")
+    kind: str = Field(description="'int' | 'str' | 'bool' | 'enum' | 'pid' | 'choice' | 'unknown'")
     required: bool
     default: bool | int | str | None = None
     min: int | None = Field(default=None, description="Inclusive lower bound, for int params")
     max: int | None = Field(default=None, description="Inclusive upper bound, for int params")
+    options: list[str] | None = Field(
+        default=None, description="Fixed choices for kind 'choice' (from a Literal[...] annotation)"
+    )
 
 
 class ModuleMethodSpec(BaseModel):

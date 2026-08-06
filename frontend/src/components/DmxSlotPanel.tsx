@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../api/client'
-import { useToast } from '../context/ToastContext'
+import { useToast } from '../context/useToast'
 import { Checkbox } from './Checkbox'
 import { ColorWheel } from './ColorWheel'
 import { DmxChannelMeter } from './DmxChannelMeter'

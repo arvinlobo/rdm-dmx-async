@@ -26,7 +26,8 @@ function findOffset(descriptions: string[], startAddress: number, pattern: RegEx
   for (let index = 0; index < descriptions.length; index += 1) {
     const offset = startAddress - 1 + index
     if (offset >= UNIVERSE_SIZE) break
-    if (pattern.test(descriptions[index].toLowerCase())) return offset
+    const description = descriptions[index]
+    if (description !== undefined && pattern.test(description.toLowerCase())) return offset
   }
   return null
 }

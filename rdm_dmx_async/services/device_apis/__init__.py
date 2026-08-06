@@ -13,6 +13,7 @@ from .position_config import PositionConfigAPI
 from .power_control import PowerControlAPI
 from .preset_control import PresetControlAPI
 from .proxy import ProxyAPI
+from .raw_pid import RawPidAPI
 from .self_test import SelfTestAPI
 from .sensor_definitions import SensorDefinitionsAPI
 from .sensors import SensorsAPI
@@ -36,4 +37,5 @@ __all__ = [
     "PresetControlAPI",
     "SystemInfoAPI",
     "ProxyAPI",
+    "RawPidAPI",
 ]

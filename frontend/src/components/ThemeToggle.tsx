@@ -1,4 +1,4 @@
-import { useTheme } from '../context/ThemeContext'
+import { useTheme } from '../context/useTheme'
 
 /** Manual light/dark override, in addition to the OS-level default. */
 export function ThemeToggle() {

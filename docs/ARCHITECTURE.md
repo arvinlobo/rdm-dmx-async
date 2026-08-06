@@ -18,7 +18,7 @@ flowchart TD
     L6["6. Device Service Layer<br/>RdmDevice, DeviceRepository, DiscoveryService,<br/>device_apis/* (17 PID-specific API modules)"]
     L5["5. Transaction Layer<br/>AsyncTransactionManager, AsyncTransaction, RetryPolicy,<br/>TransactionNumberAllocator, LateResponseClassifier"]
     L4["4. Protocol and Packet Layer<br/>RDME120Protocol, ResponseCorrelator, RdmValidator,<br/>PacketEncoder/Decoder, ManchesterDiscoveryDecoder,<br/>domain: StandardPID, BROADCAST_UID"]
-    L3["3. DMX/RDM Scheduling Layer<br/>DmxFrameScheduler, RdmRequestWindow"]
+    L3["3. DMX/RDM Scheduling Layer<br/>DmxFrameScheduler"]
     L2["2. Transport Layer<br/>AsyncSerialTransport, FrameBuffer, RdmProtocolDetector,<br/>InterfaceAdapter: Enttec, DMXKing (stub), GenericSerial, ManualBreak"]
     L1["1. Hardware / OS Layer<br/>pyserial, asyncio, OS serial drivers"]
 
@@ -59,14 +59,12 @@ flowchart TD
 
 ### 3. DMX/RDM Scheduling Layer
 **Purpose**: Timing control and bus arbitration
-- `DmxFrameScheduler`: Controls DMX frame rate and timing
-- `RdmRequestWindow`: Manages RDM windows between DMX frames
+- `DmxFrameScheduler`: Controls DMX frame rate and timing, and pauses output for RDM request windows (`pause_for_rdm`), called directly by `RDME120Protocol`
 - Break and Mark-After-Break timing coordination
 - Prevents bus conflicts
 
 **Key Files**:
 - `scheduling/dmx_scheduler.py`
-- `scheduling/rdm_window.py`
 
 **SRP Compliance**: Scheduling separated from protocol operations
 
@@ -241,7 +239,7 @@ sequenceDiagram
     participant Svc as RdmDevice
     participant Txn as AsyncTransactionManager
     participant Proto as RDME120Protocol
-    participant Sched as RdmRequestWindow
+    participant Sched as DmxFrameScheduler
     participant Trans as AsyncSerialTransport
     participant Adapter as InterfaceAdapter
     participant HW as Serial Port / RDM Device

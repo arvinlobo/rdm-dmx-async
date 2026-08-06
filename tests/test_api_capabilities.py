@@ -180,6 +180,7 @@ def test_get_module_schema_lists_methods_and_params(app, client):
                 "default": True,
                 "min": None,
                 "max": None,
+                "options": None,
             }
         ]
         assert methods_by_name["set_hours"]["is_getter"] is False
@@ -191,6 +192,7 @@ def test_get_module_schema_lists_methods_and_params(app, client):
                 "default": None,
                 "min": 0,
                 "max": 999_999,
+                "options": None,
             }
         ]
     finally:
@@ -299,6 +301,7 @@ def test_get_module_schema_start_address_range_is_1_to_512(app, client):
             "default": None,
             "min": 1,
             "max": 512,
+            "options": None,
         }
 
         personality_param = methods_by_name["set_personality"]["params"][0]

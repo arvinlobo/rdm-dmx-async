@@ -14,7 +14,7 @@ without the backend needing a route defined per method.
 
 import inspect
 import logging
-from typing import Any
+from typing import Any, Literal, get_args, get_origin
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -203,6 +203,9 @@ _ENUM_PARAMS: set[tuple[str, str, str]] = {
 # the device actually reports supporting) rather than a bare 0-65535 numeric field.
 _PID_PARAMS: set[tuple[str, str, str]] = {
     ("system", "get_parameter_description", "pid"),
+    ("raw", "describe", "pid"),
+    ("raw", "get", "pid"),
+    ("raw", "set", "pid"),
 }
 
 
@@ -213,6 +216,10 @@ def _resolve_module(device: RdmDevice, module_name: str) -> object:
 
 
 def _infer_kind(annotation: Any) -> str:
+    # A Literal[...] annotation (e.g. RawPidAPI's `format` param) is a fixed set of
+    # string choices - render as a static dropdown, no per-method registration needed.
+    if get_origin(annotation) is Literal:
+        return "choice"
     if annotation is bool:
         return "bool"
     if annotation is int:
@@ -264,6 +271,7 @@ def get_module_schema(module_name: str, device: RdmDevice = Depends(get_device))
             param_min, param_max = _PARAM_RANGE_HINTS.get((module_name, name, p.name), (None, None))
             if kind == "int" and param_min is None:
                 param_min, param_max = 0, 255
+            options = list(get_args(p.annotation)) if kind == "choice" else None
             params.append(
                 ModuleParamSpec(
                     name=p.name,
@@ -272,6 +280,7 @@ def get_module_schema(module_name: str, device: RdmDevice = Depends(get_device))
                     default=None if p.default is inspect.Parameter.empty else p.default,
                     min=param_min,
                     max=param_max,
+                    options=options,
                 )
             )
         is_getter = (name.startswith("get") or name == "get") and all(
@@ -335,7 +344,7 @@ async def call_module_method(
 
     try:
         result = await method(*body.args)
-    except TypeError as exc:
+    except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     serialized = _serialize(result)
@@ -374,14 +383,27 @@ async def get_supported_pids(device: RdmDevice = Depends(get_device)) -> Support
 
     Used by ``system.get_parameter_description``, which otherwise NAKs (UNKNOWN_PID)
     for any PID the device wasn't actually asked about via GET_SUPPORTED_PARAMETERS.
+    Manufacturer-specific PIDs (no StandardPID name) are further resolved via
+    PARAMETER_DESCRIPTION so the selector shows what the PID actually does (e.g.
+    "LUMA_PWM_POWER_SCALE") instead of a bare, meaningless hex number.
     """
     pids = await device.system.get_supported_parameters()
+    # Try PARAMETER_DESCRIPTION for every unresolved PID, don't gate or bail out early:
+    # confirmed live that support for this command is inconsistent PER-PID on real
+    # hardware (e.g. PID 0x1041 NAKs it while 0x8005/0x8048 on the SAME device answer
+    # fine) - neither device.supports_pid(PARAMETER_DESCRIPTION) nor "stop after the
+    # first NAK" reliably predicts which PIDs will resolve. The extra per-PID round
+    # trips only happen once per device per session since this endpoint's response is
+    # cached client-side (frontend/src/api/client.ts's supportedPidsCache).
     options = []
     for pid in pids or []:
         try:
             name = StandardPID(pid).name
         except ValueError:
             name = f"0x{pid:04X}"
+            info = await device.system.get_parameter_description(pid)
+            if info and info.get("description"):
+                name = info["description"]
         options.append(SupportedPidOption(pid=pid, name=name))
     return SupportedPidListResponse(options=options)
 

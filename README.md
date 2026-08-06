@@ -168,7 +168,7 @@ Frequently used objects are re-exported from `rdm_dmx_async`:
 - Transport: `AsyncSerialTransport`, `EnttecAdapter`, `InterfaceAdapter`
 - Packets: `RDMRequest`, `RDMResponse`, `PacketEncoder`, `PacketDecoder`
 - Transactions: `AsyncTransaction`, `RetryPolicy`, `TransactionResult`
-- Scheduling: `DmxFrameScheduler`, `RdmRequestWindow`
+- Scheduling: `DmxFrameScheduler`
 - Types and helpers: `UID`, `PID`, `CommandClass`, UID conversion helpers
 
 Importing from the top-level package is recommended for these stable entry

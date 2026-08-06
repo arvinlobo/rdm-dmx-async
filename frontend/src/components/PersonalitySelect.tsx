@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import type { PersonalityOption } from '../api/types'
-import { useToast } from '../context/ToastContext'
+import { useToast } from '../context/useToast'
 
 export interface PersonalitySelectProps {
   uid: string
@@ -37,11 +37,14 @@ export function PersonalitySelect({ uid, label, value, onChange, disabled }: Per
 
   if (error) return <p className="field field-error">{error}</p>
 
+  const selected = options.find((option) => option.personality === value)
+
   return (
     <label className="field field-select">
       <span className="field-label">{label}</span>
       <select
         aria-label={label}
+        title={selected ? `${selected.personality}: ${selected.description} (${selected.footprint} ch)` : undefined}
         value={value}
         disabled={disabled || options.length === 0}
         onChange={(event) => onChange(Number(event.target.value))}

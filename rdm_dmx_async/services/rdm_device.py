@@ -24,6 +24,7 @@ from .device_apis import (
     PowerControlAPI,
     PresetControlAPI,
     ProxyAPI,
+    RawPidAPI,
     SelfTestAPI,
     SensorDefinitionsAPI,
     SensorsAPI,
@@ -112,6 +113,10 @@ API_PID_MAPPING: dict[str, list[StandardPID]] = {
         StandardPID.PROXIED_DEVICES,
         StandardPID.PROXIED_DEVICE_COUNT,
     ],
+    # No fixed PID list: this is the raw escape hatch for PIDs with no dedicated API
+    # module (manufacturer-specific or otherwise), so it's always shown regardless of
+    # which PIDs a given device happens to support - see supports_api()'s special case.
+    "raw": [],
 }
 
 # Per ANSI E1.20 sec. 10.5, a responder's GET_SUPPORTED_PARAMETERS reply MAY
@@ -218,6 +223,9 @@ class RdmDevice:
     - presets: get/set_playback() / get_status() / get/set_merge_mode() - Preset control
     - system: get_supported_parameters() / get_parameter_description() / get_queued_message() / get_status_messages() / get/set_language() / get/clear_comms_status() / get/set_sub_device_status_report_threshold() - System info
     - proxy: get_proxied_devices() / get_proxied_device_count() - RDM proxy management (only meaningful for proxy devices)
+    - raw: describe(pid) / get(pid, data_format) / set(pid, value, data_format) - Generic GET/SET
+      for any PID (hex/ascii/fixed-width-number encoding), including manufacturer-specific or
+      otherwise-unwrapped PIDs with no dedicated API module
 
     Example usage:
         # Basic API usage
@@ -277,6 +285,7 @@ class RdmDevice:
         self.presets = PresetControlAPI(self)
         self.system = SystemInfoAPI(self)
         self.proxy = ProxyAPI(self)
+        self.raw = RawPidAPI(self)
 
     @property
     def uid(self) -> UID:
@@ -575,6 +584,9 @@ class RdmDevice:
             self._logger.warning("Unknown API module: %s", api_name)
             return False
 
+        if api_name == "raw":
+            return True  # Escape hatch for PIDs with no dedicated API - always available
+
         if not self._capabilities_checked:
             self._logger.debug(
                 "Capabilities not checked for API '%s' (assuming supported)", api_name
@@ -615,6 +627,17 @@ class RdmDevice:
         details = {}
 
         for api_name, required_pids in API_PID_MAPPING.items():
+            if api_name == "raw":
+                # Escape hatch, not tied to any fixed PID list - always available.
+                details[api_name] = {
+                    "supported": True,
+                    "pids": [],
+                    "supported_pids": [],
+                    "missing_pids": [],
+                    "coverage": 1.0,
+                }
+                continue
+
             pid_values = [p.value for p in required_pids]
 
             if self._capabilities_checked and self._supported_pids:

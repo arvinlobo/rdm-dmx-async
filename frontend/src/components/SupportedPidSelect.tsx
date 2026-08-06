@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import type { SupportedPidOption } from '../api/types'
-import { useToast } from '../context/ToastContext'
+import { useToast } from '../context/useToast'
 
 export interface SupportedPidSelectProps {
   uid: string
@@ -38,11 +38,16 @@ export function SupportedPidSelect({ uid, label, value, onChange, disabled }: Su
 
   if (error) return <p className="field field-error">{error}</p>
 
+  const selected = options.find((option) => option.pid === value)
+
   return (
     <label className="field field-select">
       <span className="field-label">{label}</span>
       <select
         aria-label={label}
+        title={
+          selected ? `${selected.name} (0x${selected.pid.toString(16).toUpperCase().padStart(4, '0')})` : undefined
+        }
         value={value}
         disabled={disabled || options.length === 0}
         onChange={(event) => onChange(Number(event.target.value))}

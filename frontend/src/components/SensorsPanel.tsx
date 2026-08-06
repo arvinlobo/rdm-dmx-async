@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import type { ModuleSchema, SensorReading } from '../api/types'
-import { useToast } from '../context/ToastContext'
+import { useToast } from '../context/useToast'
 import { MethodForm } from './MethodForm'
 import { Skeleton } from './Skeleton'
 

@@ -51,7 +51,7 @@ export interface CapabilityReport {
   modules: Record<string, ModuleSupport>
 }
 
-export type ParamKind = 'int' | 'str' | 'bool' | 'enum' | 'pid' | 'unknown'
+export type ParamKind = 'int' | 'str' | 'bool' | 'enum' | 'pid' | 'choice' | 'unknown'
 
 export interface ModuleParamSpec {
   name: string
@@ -60,6 +60,7 @@ export interface ModuleParamSpec {
   default: boolean | number | string | null
   min: number | null
   max: number | null
+  options?: string[] | null
 }
 
 /** A callable method on a device API module (getter or action). */
@@ -129,7 +130,7 @@ export interface DmxSendRequest {
   repeat?: boolean
 }
 
-/** Human-friendly labels for the 16 device API modules (matches API_PID_MAPPING keys). */
+/** Human-friendly labels for the 17 device API modules (matches API_PID_MAPPING keys). */
 export const MODULE_LABELS: Record<string, string> = {
   device_label: 'Device Label',
   dmx_config: 'DMX Configuration',
@@ -148,6 +149,7 @@ export const MODULE_LABELS: Record<string, string> = {
   presets: 'Preset Control',
   system: 'System Info',
   proxy: 'Proxy',
+  raw: 'Raw PID Access',
 }
 
 /** Groups modules into dashboard sections so related cards are shown together. */
@@ -168,9 +170,10 @@ export const MODULE_CATEGORIES: Record<string, string> = {
   maintenance: 'Maintenance',
   display: 'Maintenance',
   sensors: 'Sensors',
+  raw: 'Advanced',
 }
 
-export const MODULE_CATEGORY_ORDER = ['Identity', 'DMX & Addressing', 'Output Control', 'Maintenance', 'Sensors']
+export const MODULE_CATEGORY_ORDER = ['Identity', 'DMX & Addressing', 'Output Control', 'Maintenance', 'Sensors', 'Advanced']
 
 /** CSS class suffix used for a per-category accent color (left border, icon tint). */
 export const MODULE_CATEGORY_ACCENTS: Record<string, string> = {
@@ -179,4 +182,5 @@ export const MODULE_CATEGORY_ACCENTS: Record<string, string> = {
   'Output Control': 'category-control',
   Maintenance: 'category-maintenance',
   Sensors: 'category-sensors',
+  Advanced: 'category-advanced',
 }

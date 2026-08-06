@@ -181,7 +181,10 @@
 
 .capability-dashboard {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  /* auto-fit (not auto-fill): collapses empty tracks so a section with fewer cards
+     than fit per row stretches its real card(s) to use the leftover width instead
+     of leaving blank grid tracks. */
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   align-items: start;
   gap: 1rem;
 }
@@ -228,6 +231,10 @@
 
 .category-sensors {
   border-left-color: #ec4899;
+}
+
+.category-advanced {
+  border-left-color: #6b7280;
 }
 
 .module-panel-summary {
@@ -519,6 +526,17 @@
   height: 2rem;
   box-sizing: border-box;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Truncate long option text (e.g. manufacturer PID descriptions) with an ellipsis
+   instead of sizing the select to its longest option - a fixed content-based width
+   would either overflow on narrow layouts or look arbitrarily wide/inconsistent
+   across devices with different PID name lengths. The full text is still visible in
+   the native dropdown list and via the title tooltip. */
+.field select {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .field select:hover,

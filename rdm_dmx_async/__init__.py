@@ -46,10 +46,7 @@ from .protocols.rdm_validator import RdmValidator, ValidationError
 from .protocols.response_correlator import ResponseCorrelator
 
 # Scheduling layer
-from .scheduling import (
-    DmxFrameScheduler,
-    RdmRequestWindow,
-)
+from .scheduling import DmxFrameScheduler
 
 # Service layer
 from .services import (
@@ -123,7 +120,6 @@ __all__ = [
     "ValidationError",
     # Scheduling
     "DmxFrameScheduler",
-    "RdmRequestWindow",
     # Transaction
     "AsyncTransaction",
     "TransactionNumberAllocator",

@@ -9,7 +9,8 @@ import type { NetworkConnectConfig } from './components/NetworkPanel'
 import { NetworkPanel } from './components/NetworkPanel'
 import { ThemeToggle } from './components/ThemeToggle'
 import { ThemeProvider } from './context/ThemeContext'
-import { ToastProvider, useToast } from './context/ToastContext'
+import { ToastProvider } from './context/ToastContext'
+import { useToast } from './context/useToast'
 
 const EMPTY_STATUS: StatusResponse = { connected: false, port: null, device_count: 0 }
 

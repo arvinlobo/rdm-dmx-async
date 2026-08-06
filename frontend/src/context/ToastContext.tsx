@@ -1,18 +1,11 @@
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
-
-export type ToastVariant = 'error' | 'success' | 'info'
+import { useCallback, useRef, useState, type ReactNode } from 'react'
+import { ToastContext, type ToastVariant } from './toast-context'
 
 interface ToastItem {
   id: number
   message: string
   variant: ToastVariant
 }
-
-interface ToastContextValue {
-  showToast: (message: string, variant?: ToastVariant) => void
-}
-
-const ToastContext = createContext<ToastContextValue | null>(null)
 
 const AUTO_DISMISS_MS = 5000
 
@@ -49,11 +42,4 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       </div>
     </ToastContext.Provider>
   )
-}
-
-export function useToast(): ToastContextValue {
-  const ctx = useContext(ToastContext)
-  // Falls back to a no-op outside a provider (e.g. components under test in isolation)
-  // rather than throwing, since toasts are a supplementary notification channel.
-  return ctx ?? { showToast: () => {} }
 }

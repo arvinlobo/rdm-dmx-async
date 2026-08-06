@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { api, ApiError } from '../api/client'
 import type { ModuleMethodSpec } from '../api/types'
-import { useToast } from '../context/ToastContext'
+import { useToast } from '../context/useToast'
 import { Button } from './Button'
 import { Checkbox } from './Checkbox'
 import { PersonalitySelect } from './PersonalitySelect'
+import { Select } from './Select'
 import { Slider } from './Slider'
 import { SupportedPidSelect } from './SupportedPidSelect'
 import { TextField } from './TextField'
@@ -18,20 +19,28 @@ export interface MethodFormProps {
 
 type ParamValue = boolean | number | string
 
-function defaultValueFor(kind: string, fallback: ParamValue | null, min: number | null): ParamValue {
+function defaultValueFor(
+  kind: string,
+  fallback: ParamValue | null,
+  min: number | null,
+  options: string[] | null,
+): ParamValue {
   if (fallback !== null && fallback !== undefined) return fallback
   if (kind === 'bool') return false
   // Enum and PID-select params both use 0 as an explicit "nothing selected" sentinel,
   // so they must not default to the param's real minimum.
   if (kind === 'enum' || kind === 'pid') return 0
   if (kind === 'int') return min ?? 0
+  if (kind === 'choice') return options?.[0] ?? ''
   return ''
 }
 
 /** Dynamically renders a form for one module method, using reusable field components per param kind. */
 export function MethodForm({ uid, moduleName, method, onSuccess }: MethodFormProps) {
   const [values, setValues] = useState<ParamValue[]>(() =>
-    method.params.map((param) => defaultValueFor(param.kind, param.default, param.min ?? null)),
+    method.params.map((param) =>
+      defaultValueFor(param.kind, param.default, param.min ?? null, param.options ?? null),
+    ),
   )
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<string | null>(null)
@@ -123,6 +132,18 @@ export function MethodForm({ uid, moduleName, method, onSuccess }: MethodFormPro
               onChange={(v) => setParam(index, v)}
               min={param.min ?? 0}
               max={param.max ?? 255}
+              disabled={disabled}
+            />
+          )
+        }
+        if (param.kind === 'choice') {
+          return (
+            <Select
+              key={param.name}
+              label={param.name}
+              value={typeof value === 'string' ? value : String(value)}
+              options={param.options ?? []}
+              onChange={(v) => setParam(index, v)}
               disabled={disabled}
             />
           )
