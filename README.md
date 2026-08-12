@@ -14,48 +14,121 @@ implementation is not yet complete.
 
 ## Requirements
 
-- Python 3.11 or newer
+- [uv](https://docs.astral.sh/uv/) for Python installation, dependency management,
+  and running Python commands
+- Git, to clone the repository
+- Python 3.11 or newer (uv downloads a compatible version automatically if
+    one is not already installed)
 - A supported USB DMX/RDM interface
 - Appropriate serial drivers for the interface
 - A DMX cable and, where required, bus termination
 - Node.js 18 or newer, only if you plan to run the [Web UI](#web-ui-rest-api--react-frontend)
 
-## Installation
+## Getting started after cloning
 
-Install the package from the repository:
+All Python setup and commands in this project use `uv`. You do not need to
+create or activate a virtual environment, run `pip`, or install the package
+globally. `uv sync` creates a local `.venv`, installs the project in editable
+mode, and keeps its dependencies synchronized with `pyproject.toml`.
 
-```console
-python -m pip install .
+### 1. Install uv
+
+If `uv` is not already installed, follow the
+[official uv installation instructions](https://docs.astral.sh/uv/getting-started/installation/).
+For example, on Windows PowerShell:
+
+```powershell
+irm https://astral.sh/uv/install.ps1 | iex
 ```
 
-For development with [uv](https://docs.astral.sh/uv/):
+On macOS or Linux:
+
+```console
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Open a new terminal if the installer updated your `PATH`, then verify the
+installation:
+
+```console
+uv --version
+```
+
+### 2. Clone and enter the repository
+
+```console
+git clone https://github.com/arvinlobo/rdm-dmx-async.git
+cd rdm-dmx-async
+```
+
+### 3. Install the required dependencies
+
+Choose the setup that matches what you want to run.
+
+Core library and CLI only:
+
+```console
+uv sync
+```
+
+Backend API and Web UI:
+
+```console
+uv sync --extra api
+```
+
+Development, tests, linting, type checking, and documentation:
 
 ```console
 uv sync --extra dev --extra docs
 ```
 
-The core runtime dependency is `pyserial`.
+Build the standalone Windows executable:
+
+```console
+uv sync --extra exe
+```
+
+Extras may be combined. For example, a contributor working on the API can
+run:
+
+```console
+uv sync --extra dev --extra docs --extra api
+```
+
+### 4. Verify the installation
+
+Run the CLI from the uv-managed environment:
+
+```console
+uv run rdm-dmx --help
+uv run rdm-dmx list-ports
+```
+
+From this point onward, run Python tools and scripts with `uv run`. There is
+no need to activate `.venv`. Run `uv sync` again after pulling changes that
+modify `pyproject.toml`.
 
 ## Command-line interface
 
-Installation provides the `rdm-dmx` command.
+The synchronized environment provides the `rdm-dmx` command.
 
 List available serial ports:
 
 ```console
-rdm-dmx list-ports
+uv run rdm-dmx list-ports
 ```
 
 Discover RDM devices using an automatically detected ENTTEC interface:
 
 ```console
-rdm-dmx discover
+uv run rdm-dmx discover
 ```
 
 Specify the serial port and discovery timeout when needed:
 
 ```console
-rdm-dmx --verbose discover --port COM3 --timeout 10
+uv run rdm-dmx --verbose discover --port COM3 --timeout 10
 ```
 
 On Linux, a port will typically look like `/dev/ttyUSB0` instead of `COM3`.
@@ -152,10 +225,10 @@ asyncio.run(main())
 Runnable demonstrations are available in [`examples/`](examples/):
 
 ```console
-python examples/simple_dmx_example.py --port COM3
-python examples/simple_dmx_example.py --port COM3 --example fade
-python examples/simple_dmx_example.py --port COM3 --example rgb
-python examples/srp_network_manager_example.py
+uv run python examples/simple_dmx_example.py --port COM3
+uv run python examples/simple_dmx_example.py --port COM3 --example fade
+uv run python examples/simple_dmx_example.py --port COM3 --example rgb
+uv run python examples/srp_network_manager_example.py
 ```
 
 ## Public API
@@ -204,7 +277,9 @@ uv run pdoc rdm_dmx_async
 
 A FastAPI backend (`api/`) exposes device discovery/control and DMX output
 over HTTP, and a Vite + React frontend (`frontend/`) provides a browser UI on
-top of it. Both are optional and separate from the core library.
+top of it. Both are optional and separate from the core library. `uv` manages
+all Python dependencies and backend commands. The frontend uses npm because
+it is a Node.js project.
 
 Install the API extra and start the backend (defaults to port 8000):
 
@@ -282,7 +357,8 @@ docstring.
 
 ## Development
 
-Install the development environment:
+From the repository root, install all contributor dependencies and the
+pre-commit hooks:
 
 ```console
 uv sync --extra dev --extra docs
