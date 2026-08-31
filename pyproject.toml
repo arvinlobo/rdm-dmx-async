@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rdm-dmx-async"
-version = "1.0.0-alpha"
+dynamic = ["version"]
 description = "Modern async-first library for RDM and DMX protocols"
 readme = "README.md"
 authors = [
@@ -53,6 +53,9 @@ exe = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["rdm_dmx_async*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "rdm_dmx_async.__version__"}
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

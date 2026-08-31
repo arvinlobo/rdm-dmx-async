@@ -21,6 +21,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from rdm_dmx_async import __version__
 from rdm_dmx_async.application.network_manager import NetworkManager
 
 from .logging_config import configure_logging
@@ -48,7 +49,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="rdm-dmx-async API",
         description="REST API for RDM device discovery/control and DMX output.",
-        version="1.0.0-alpha",
+        version=__version__,
         lifespan=_lifespan,
     )
     app.add_middleware(
