@@ -9,8 +9,6 @@ The project currently targets the ENTTEC DMX USB Pro interface. DMXKing
 adapter types are present as extension points, but their framing
 implementation is not yet complete.
 
-> **Project status:** Alpha. The public API may change before the first stable
-> release.
 
 ## Requirements
 
